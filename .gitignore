@@ -42,3 +42,4 @@ htmlcov/
 # Claude
 .claude/
 REFINEMENTS.md
+COMMITS.md

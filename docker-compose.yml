@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: pokerclub
       POSTGRES_PASSWORD: ${DB_PASSWORD:-pokerclub}
     ports:
-      - "5432:5432"
+      - "5435:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -26,7 +26,7 @@ services:
     ports:
       - "8000:8000"
     command: >
-      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+      sh -c "sleep 3 && alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     volumes:
       - ./backend:/app
 

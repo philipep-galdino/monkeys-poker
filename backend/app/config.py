@@ -1,8 +1,13 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings
+
+# Look for .env in the project root (one level up from backend/)
+_env_file = Path(__file__).resolve().parent.parent.parent / ".env"
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql+asyncpg://pokerclub:pokerclub@localhost:5432/pokerclub"
+    database_url: str = "postgresql+asyncpg://pokerclub:pokerclub@localhost:5435/pokerclub"
 
     mp_access_token: str = ""
     mp_webhook_secret: str = ""
@@ -22,7 +27,7 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
-    model_config = {"env_file": ".env", "extra": "ignore"}
+    model_config = {"env_file": str(_env_file), "extra": "ignore"}
 
 
 settings = Settings()
