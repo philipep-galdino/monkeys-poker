@@ -2,22 +2,27 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth import create_access_token, get_current_admin, verify_admin_credentials
 from app.database import get_db
-from app.models import PaymentPix, Session, SessionPlayer, Transaction
+from app.models import PaymentPix, Player, Session, SessionPlayer, Transaction
 from app.schemas import (
     AdminLogin,
     CashoutRequest,
     CashoutResponse,
     CashPaymentResponse,
+    ClosePreviewPlayer,
+    ClosePreviewResponse,
+    PlayerHistoryResponse,
     ReconciliationResponse,
+    SessionCloseRequest,
     TokenResponse,
     VerifyPaymentResponse,
 )
+from app.routers.sessions import _build_player_history
 from app.services.payment_service import payment_service
 from app.services.websocket_manager import manager
 
@@ -30,43 +35,53 @@ async def admin_login(data: AdminLogin):
     if not verify_admin_credentials(data.username, data.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
+            detail="Credenciais inválidas",
         )
     token = create_access_token(data.username)
     return TokenResponse(access_token=token)
 
 
 @router.post(
-    "/sessions/{session_id}/players/{session_player_id}/cash",
+    "/clubs/{club_id}/sessions/{session_id}/players/{session_player_id}/cash",
     response_model=CashPaymentResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def mark_cash_payment(
+    club_id: uuid.UUID,
     session_id: uuid.UUID,
     session_player_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     _admin: str = Depends(get_current_admin),
 ):
     """Mark a player as paid in cash, bypassing Pix entirely."""
-    sp = await _get_session_player(session_id, session_player_id, db)
+    sp = await _get_session_player(club_id, session_id, session_player_id, db)
     session = await db.get(Session, session_id)
     if not session:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sessão não encontrada")
 
-    amount = float(session.buy_in_amount) if sp.status == "waiting_payment" else float(session.rebuy_amount)
-    chip_count = int(amount)
+    is_buyin = sp.status == "waiting_payment"
+    amount = float(session.buy_in_amount) if is_buyin else float(session.rebuy_amount)
+    rake = float(session.rake_buyin) if is_buyin else float(session.rake_rebuy)
+    chip_count = int(amount - rake)
+
+    # Get physical count from session kits
+    kit = session.buyin_kit if is_buyin else session.rebuy_kit
+    physical_count = kit.get("total_chips_count", 0) if kit else 0
 
     transaction = Transaction(
         session_player_id=sp.id,
-        type="buy_in" if sp.status == "waiting_payment" else "rebuy",
+        type="buy_in" if is_buyin else "rebuy",
         amount=amount,
         chip_count=chip_count,
+        physical_chip_count=physical_count,
+        rake_amount=rake,
         payment_method="cash",
         status="confirmed",
     )
     db.add(transaction)
 
     sp.total_chips_in += chip_count
+    sp.total_physical_chips += physical_count
     if sp.status == "waiting_payment":
         sp.status = "active"
     sp.updated_at = datetime.now(timezone.utc)
@@ -88,17 +103,18 @@ async def mark_cash_payment(
 
 
 @router.post(
-    "/sessions/{session_id}/players/{session_player_id}/verify",
+    "/clubs/{club_id}/sessions/{session_id}/players/{session_player_id}/verify",
     response_model=VerifyPaymentResponse,
 )
 async def verify_payment(
+    club_id: uuid.UUID,
     session_id: uuid.UUID,
     session_player_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     _admin: str = Depends(get_current_admin),
 ):
     """Poll Mercado Pago API for the latest payment status of a player's pending transaction."""
-    sp = await _get_session_player(session_id, session_player_id, db)
+    sp = await _get_session_player(club_id, session_id, session_player_id, db)
 
     # Find the most recent pending pix payment
     result = await db.execute(
@@ -108,21 +124,21 @@ async def verify_payment(
     )
     transaction = result.scalar_one_or_none()
     if not transaction:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No pending transaction found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nenhuma transação pendente encontrada")
 
     result = await db.execute(
         select(PaymentPix).where(PaymentPix.transaction_id == transaction.id)
     )
     pix = result.scalar_one_or_none()
     if not pix:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No Pix payment record found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registro de pagamento Pix não encontrado")
 
     try:
         mp_status = payment_service.get_payment_status(pix.mp_payment_id)
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Mercado Pago API unavailable",
+            detail="API do Mercado Pago indisponível",
         )
 
     updated = False
@@ -131,6 +147,7 @@ async def verify_payment(
         pix.confirmed_at = datetime.now(timezone.utc)
         transaction.status = "confirmed"
         sp.total_chips_in += transaction.chip_count
+        sp.total_physical_chips += transaction.physical_chip_count
         if sp.status == "waiting_payment":
             sp.status = "active"
         sp.updated_at = datetime.now(timezone.utc)
@@ -153,10 +170,11 @@ async def verify_payment(
 
 
 @router.post(
-    "/sessions/{session_id}/players/{session_player_id}/cashout",
+    "/clubs/{club_id}/sessions/{session_id}/players/{session_player_id}/cashout",
     response_model=CashoutResponse,
 )
 async def cashout_player(
+    club_id: uuid.UUID,
     session_id: uuid.UUID,
     session_player_id: uuid.UUID,
     data: CashoutRequest,
@@ -164,7 +182,7 @@ async def cashout_player(
     _admin: str = Depends(get_current_admin),
 ):
     """Register a player's cashout with the number of chips returned."""
-    sp = await _get_session_player(session_id, session_player_id, db)
+    sp = await _get_session_player(club_id, session_id, session_player_id, db)
 
     if sp.status != "active":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Jogador não possui fichas")
@@ -198,26 +216,101 @@ async def cashout_player(
     )
 
 
-@router.post("/sessions/{session_id}/close", response_model=ReconciliationResponse)
-async def close_session(
+@router.get(
+    "/clubs/{club_id}/sessions/{session_id}/close-preview",
+    response_model=ClosePreviewResponse,
+)
+async def close_preview(
+    club_id: uuid.UUID,
     session_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     _admin: str = Depends(get_current_admin),
 ):
-    """Close a session, cancel pending payments, and return reconciliation summary."""
-    session = await db.get(Session, session_id)
-    if not session:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    """Preview which players have not cashed out before closing a session."""
+    session = await _get_session(club_id, session_id, db)
     if session.status == "closed":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Session already closed")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Sessão já encerrada")
 
-    # Cancel all pending transactions for this session
     result = await db.execute(
-        select(SessionPlayer).where(SessionPlayer.session_id == session_id)
+        select(SessionPlayer)
+        .where(SessionPlayer.session_id == session_id, SessionPlayer.status == "active")
+        .options(selectinload(SessionPlayer.player))
+    )
+    uncashed = result.scalars().all()
+
+    return ClosePreviewResponse(
+        session_id=session_id,
+        uncashed_players=[
+            ClosePreviewPlayer(
+                id=sp.id,
+                name=sp.player.name,
+                total_chips_in=sp.total_chips_in,
+                total_physical_chips=sp.total_physical_chips,
+            )
+            for sp in uncashed
+        ],
+    )
+
+
+@router.post(
+    "/clubs/{club_id}/sessions/{session_id}/close",
+    response_model=ReconciliationResponse,
+)
+async def close_session(
+    club_id: uuid.UUID,
+    session_id: uuid.UUID,
+    data: SessionCloseRequest = SessionCloseRequest(),
+    db: AsyncSession = Depends(get_db),
+    _admin: str = Depends(get_current_admin),
+):
+    """Close a session, cancel pending payments, and return reconciliation summary.
+
+    If force=False and there are uncashed active players, returns 409 with the list.
+    If force=True, auto-cashouts active players with chips_out=0 before closing.
+    """
+    session = await _get_session(club_id, session_id, db)
+    if session.status == "closed":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Sessão já encerrada")
+
+    # Fetch all session players
+    result = await db.execute(
+        select(SessionPlayer)
+        .where(SessionPlayer.session_id == session_id)
+        .options(selectinload(SessionPlayer.player))
     )
     session_players = result.scalars().all()
     sp_ids = [sp.id for sp in session_players]
 
+    # Check for uncashed active players
+    active_players = [sp for sp in session_players if sp.status == "active"]
+    if active_players and not data.force:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "Existem jogadores que não fizeram cashout.",
+                "uncashed_players": [
+                    {"id": str(sp.id), "name": sp.player.name, "total_chips_in": sp.total_chips_in}
+                    for sp in active_players
+                ],
+            },
+        )
+
+    # Auto-cashout active players with chips_out=0
+    for sp in active_players:
+        tx = Transaction(
+            session_player_id=sp.id,
+            type="cash_out",
+            amount=0,
+            chip_count=0,
+            payment_method=None,
+            status="confirmed",
+        )
+        db.add(tx)
+        sp.total_chips_out = 0
+        sp.status = "cashed_out"
+        sp.updated_at = datetime.now(timezone.utc)
+
+    # Cancel all pending transactions
     cancelled_count = 0
     if sp_ids:
         result = await db.execute(
@@ -269,6 +362,15 @@ async def close_session(
     )
     total_cash = float(result.scalar_one())
 
+    result = await db.execute(
+        select(func.coalesce(func.sum(Transaction.rake_amount), 0)).where(
+            Transaction.session_player_id.in_(sp_ids),
+            Transaction.status == "confirmed",
+            Transaction.type.in_(["buy_in", "rebuy"]),
+        )
+    )
+    total_rake = float(result.scalar_one())
+
     # Close the session
     session.status = "closed"
     session.closed_at = datetime.now(timezone.utc)
@@ -289,22 +391,48 @@ async def close_session(
         total_chips_returned=total_chips_returned,
         total_collected_pix=total_pix,
         total_collected_cash=total_cash,
+        total_rake=total_rake,
         discrepancy=discrepancy,
         warning=warning,
         cancelled_pending=cancelled_count,
     )
 
 
+@router.get(
+    "/clubs/{club_id}/players/{player_id}/history",
+    response_model=PlayerHistoryResponse,
+)
+async def get_player_history(
+    club_id: uuid.UUID,
+    player_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _admin: str = Depends(get_current_admin),
+):
+    """Admin endpoint to see a player's full activity history across all sessions in the club."""
+    player = await db.get(Player, player_id)
+    if not player or player.club_id != club_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Jogador não encontrado")
+        
+    return await _build_player_history(club_id, player, db)
+
+
+async def _get_session(club_id: uuid.UUID, session_id: uuid.UUID, db: AsyncSession) -> Session:
+    session = await db.get(Session, session_id)
+    if not session or session.club_id != club_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sessão não encontrada")
+    return session
+
+
 async def _get_session_player(
-    session_id: uuid.UUID, session_player_id: uuid.UUID, db: AsyncSession
+    club_id: uuid.UUID, session_id: uuid.UUID, session_player_id: uuid.UUID, db: AsyncSession
 ) -> SessionPlayer:
-    """Look up a session_player by ID, ensuring it belongs to the given session."""
+    """Look up a session_player by ID, ensuring it belongs to the given session and club."""
     result = await db.execute(
         select(SessionPlayer)
         .where(SessionPlayer.id == session_player_id, SessionPlayer.session_id == session_id)
-        .options(selectinload(SessionPlayer.player))
+        .options(selectinload(SessionPlayer.player), selectinload(SessionPlayer.session))
     )
     sp = result.scalar_one_or_none()
-    if not sp:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Player not found in session")
+    if not sp or sp.session.club_id != club_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Jogador não encontrado na sessão")
     return sp
