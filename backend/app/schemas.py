@@ -23,6 +23,74 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+# ── Club ─────────────────────────────────────────────────────────────────────
+
+class ClubCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    slug: str = Field(min_length=1, max_length=100, pattern=r"^[a-z0-9\-]+$")
+    description: str | None = None
+    default_rake_buyin: float = Field(ge=0, default=0)
+    default_rake_rebuy: float = Field(ge=0, default=0)
+    allow_multiple_buyins: bool = False
+
+
+class ClubUpdate(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=200)
+    description: str | None = None
+    default_rake_buyin: float | None = Field(None, ge=0)
+    default_rake_rebuy: float | None = Field(None, ge=0)
+    allow_multiple_buyins: bool | None = None
+
+
+class ClubResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    slug: str
+    description: str | None
+    default_rake_buyin: float
+    default_rake_rebuy: float
+    allow_multiple_buyins: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ClubListResponse(BaseModel):
+    items: list[ClubResponse]
+    total: int
+
+
+# ── Chip Denominations ──────────────────────────────────────────────────────
+
+class ChipDenominationItem(BaseModel):
+    label: str = Field(min_length=1, max_length=50)
+    value: float = Field(gt=0)
+    quantity: int = Field(ge=0, default=0)
+    color: str | None = None
+    active: bool = True
+    sort_order: int = 0
+
+
+class ChipDenominationResponse(ChipDenominationItem):
+    id: uuid.UUID
+
+    model_config = {"from_attributes": True}
+
+
+class ChipBreakdownItem(BaseModel):
+    value: float
+    label: str
+    color: str | None
+    count: int
+
+
+class ChipBreakdownResponse(BaseModel):
+    items: list[ChipBreakdownItem]
+    total_value: float
+    total_chips_count: int = 0
+    remainder: float
+
+
 # ── Session ──────────────────────────────────────────────────────────────────
 
 class SessionCreate(BaseModel):
@@ -31,6 +99,9 @@ class SessionCreate(BaseModel):
     buy_in_amount: float = Field(gt=0)
     rebuy_amount: float = Field(gt=0)
     allow_rebuys: bool = True
+    rake_buyin: float | None = Field(None, ge=0)
+    rake_rebuy: float | None = Field(None, ge=0)
+    table_limit: int | None = Field(None, ge=1)
 
 
 class PlayerBrief(BaseModel):
@@ -46,6 +117,8 @@ class TransactionResponse(BaseModel):
     type: str
     amount: float
     chip_count: int
+    physical_chip_count: int = 0
+    rake_amount: float = 0
     payment_method: str | None
     status: str
     created_at: datetime
@@ -59,6 +132,7 @@ class SessionPlayerResponse(BaseModel):
     token: uuid.UUID
     status: str
     total_chips_in: int
+    total_physical_chips: int = 0
     total_chips_out: int
     joined_at: datetime
     transactions: list[TransactionResponse] = []
@@ -68,12 +142,18 @@ class SessionPlayerResponse(BaseModel):
 
 class SessionResponse(BaseModel):
     id: uuid.UUID
+    club_id: uuid.UUID
     name: str
     blinds_info: str
     buy_in_amount: float
     rebuy_amount: float
     allow_rebuys: bool
+    rake_buyin: float = 0
+    rake_rebuy: float = 0
     status: str
+    table_limit: int | None = None
+    buyin_kit: dict | None = None
+    rebuy_kit: dict | None = None
     created_at: datetime
     closed_at: datetime | None
     player_count: int = 0
@@ -95,6 +175,7 @@ class SessionListResponse(BaseModel):
 class PlayerJoinRequest(BaseModel):
     name: str = Field(min_length=2, max_length=100)
     phone: str
+    cash_buy_ins: int = Field(0, ge=0)
 
     @field_validator("phone")
     @classmethod
@@ -121,6 +202,7 @@ class PlayerSessionResponse(BaseModel):
     player_name: str
     status: str
     total_chips_in: int
+    total_physical_chips: int = 0
     total_chips_out: int
     transactions: list[TransactionResponse] = []
 
@@ -161,6 +243,22 @@ class CashoutResponse(BaseModel):
 
 # ── Session Close / Reconciliation ───────────────────────────────────────────
 
+class SessionCloseRequest(BaseModel):
+    force: bool = False
+
+
+class ClosePreviewPlayer(BaseModel):
+    id: uuid.UUID
+    name: str
+    total_chips_in: int
+    total_physical_chips: int = 0
+
+
+class ClosePreviewResponse(BaseModel):
+    uncashed_players: list[ClosePreviewPlayer]
+    session_id: uuid.UUID
+
+
 class ReconciliationResponse(BaseModel):
     session_id: uuid.UUID
     status: str
@@ -168,6 +266,7 @@ class ReconciliationResponse(BaseModel):
     total_chips_returned: int
     total_collected_pix: float
     total_collected_cash: float
+    total_rake: float = 0
     discrepancy: int
     warning: str | None = None
     cancelled_pending: int = 0
@@ -180,6 +279,25 @@ class VerifyPaymentResponse(BaseModel):
     mp_status: str
     local_status: str
     updated: bool
+
+
+# ── Player History ───────────────────────────────────────────────────────────
+
+class PlayerHistoryItem(BaseModel):
+    session_id: uuid.UUID
+    session_name: str
+    session_date: datetime
+    total_buyin: float
+    total_cashout: int
+    net_result: float
+    rebuy_count: int
+
+
+class PlayerHistoryResponse(BaseModel):
+    player: PlayerBrief
+    items: list[PlayerHistoryItem]
+    total_sessions: int
+    total_net: float
 
 
 # ── Health ───────────────────────────────────────────────────────────────────
