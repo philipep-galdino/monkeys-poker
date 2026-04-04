@@ -26,6 +26,7 @@ async def _process_approved_payment(
     transaction.status = "confirmed"
 
     sp.total_chips_in += transaction.chip_count
+    sp.total_physical_chips += transaction.physical_chip_count
     if sp.status == "waiting_payment":
         sp.status = "active"
 
