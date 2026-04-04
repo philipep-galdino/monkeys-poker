@@ -12,7 +12,7 @@ function formatPhone(value: string): string {
 }
 
 export default function PlayerJoin() {
-  const { sessionId } = useParams<{ sessionId: string }>();
+  const { clubId, sessionId } = useParams<{ clubId: string; sessionId: string }>();
   const navigate = useNavigate();
 
   const [name, setName] = useState("");
@@ -38,15 +38,15 @@ export default function PlayerJoin() {
 
     setLoading(true);
     try {
-      const result = await api.joinSession(sessionId!, name.trim(), digits);
+      const result = await api.joinSession(clubId!, sessionId!, name.trim(), digits);
 
       if (result.is_returning) {
         setWelcomeBack(pt.join.welcomeBack(result.player.name));
         setTimeout(() => {
-          navigate(`/session/${sessionId}/player/${result.token}`);
+          navigate(`/session/${clubId}/${sessionId}/player/${result.token}`);
         }, 1500);
       } else {
-        navigate(`/session/${sessionId}/player/${result.token}`);
+        navigate(`/session/${clubId}/${sessionId}/player/${result.token}`);
       }
     } catch (err) {
       if (err instanceof ApiError) {
@@ -63,7 +63,7 @@ export default function PlayerJoin() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
         <div className="bg-white rounded-2xl shadow-lg p-8 text-center max-w-sm w-full">
-          <div className="text-4xl mb-4">👋</div>
+          <div className="text-4xl mb-4">&#128075;</div>
           <p className="text-xl font-semibold text-gray-800">{welcomeBack}</p>
         </div>
       </div>

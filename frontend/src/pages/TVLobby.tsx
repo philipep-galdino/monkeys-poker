@@ -9,8 +9,8 @@ const PLAYERS_PER_PAGE = 10;
 const PAGE_ROTATE_MS = 8000;
 
 export default function TVLobby() {
-  const { sessionId } = useParams<{ sessionId: string }>();
-  const { data, refetch } = useSession(sessionId);
+  const { clubId, sessionId } = useParams<{ clubId: string; sessionId: string }>();
+  const { data, refetch } = useSession(clubId, sessionId);
   const [currentPage, setCurrentPage] = useState(0);
 
   // Request Wake Lock to prevent screen sleep
@@ -59,7 +59,7 @@ export default function TVLobby() {
     (currentPage + 1) * PLAYERS_PER_PAGE,
   );
 
-  const joinUrl = `${window.location.origin}/join/${sessionId}`;
+  const joinUrl = `${window.location.origin}/join/${clubId}/${sessionId}`;
   const now = new Date().toLocaleDateString("pt-BR", {
     day: "2-digit",
     month: "2-digit",
@@ -148,7 +148,11 @@ export default function TVLobby() {
                           </span>
                         </td>
                         <td className="py-4 px-4 text-right text-2xl">
-                          {sp.total_chips_in > 0 ? sp.total_chips_in : "—"}
+                          {sp.total_physical_chips > 0
+                            ? sp.total_physical_chips
+                            : sp.total_chips_in > 0
+                              ? sp.total_chips_in
+                              : "\u2014"}
                         </td>
                       </tr>
                     ))}

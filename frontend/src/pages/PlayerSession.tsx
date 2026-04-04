@@ -15,7 +15,8 @@ type PixData = {
 };
 
 export default function PlayerSession() {
-  const { sessionId, token } = useParams<{
+  const { clubId, sessionId, token } = useParams<{
+    clubId: string;
     sessionId: string;
     token: string;
   }>();
@@ -25,10 +26,18 @@ export default function PlayerSession() {
   const [pixError, setPixError] = useState("");
   const [copied, setCopied] = useState(false);
   const [sessionClosed, setSessionClosed] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState(false);
+  const [loadingBreakdown, setLoadingBreakdown] = useState(false);
+  const [breakdownData, setBreakdownData] = useState<{
+    items: { label: string; color: string | null; count: number }[];
+    totalCount: number;
+    totalValue: number;
+  } | null>(null);
 
   // Poll every 5s when showing a QR code (waiting for payment)
   const shouldPoll = !!pixData;
   const { data, isLoading, error, refetch } = usePlayerSession(
+    clubId,
     sessionId,
     token,
     shouldPoll ? 5000 : undefined,
@@ -41,7 +50,6 @@ export default function PlayerSession() {
       (event: WSEvent) => {
         if (event.event === "payment_confirmed" || event.event === "player_cashed_out") {
           refetch();
-          // Clear QR if our payment was confirmed
           if (event.event === "payment_confirmed") {
             setPixData(null);
           }
@@ -62,11 +70,11 @@ export default function PlayerSession() {
   }, [data?.status, pixData]);
 
   const handleBuyin = async () => {
-    if (!sessionId || !token) return;
+    if (!clubId || !sessionId || !token) return;
     setPixLoading(true);
     setPixError("");
     try {
-      const result = await api.createBuyin(sessionId, token);
+      const result = await api.createBuyin(clubId, sessionId, token);
       setPixData(result);
     } catch (err) {
       setPixError(
@@ -78,11 +86,11 @@ export default function PlayerSession() {
   };
 
   const handleRebuy = async () => {
-    if (!sessionId || !token) return;
+    if (!clubId || !sessionId || !token) return;
     setPixLoading(true);
     setPixError("");
     try {
-      const result = await api.createRebuy(sessionId, token);
+      const result = await api.createRebuy(clubId, sessionId, token);
       setPixData(result);
     } catch (err) {
       setPixError(
@@ -128,9 +136,27 @@ export default function PlayerSession() {
     cashed_out: "bg-gray-100 text-gray-800",
   }[data.status] ?? "bg-gray-100 text-gray-800";
 
-  const rebuyCount = data.transactions.filter(
-    (t) => t.type === "rebuy" && t.status === "confirmed",
-  ).length;
+  const confirmedRebuyTotal = data.transactions
+    .filter((t) => t.type === "rebuy" && t.status === "confirmed")
+    .reduce((acc, t) => acc + t.amount, 0);
+
+  const fetchBreakdown = async () => {
+    if (!clubId || !data) return;
+    setShowBreakdown(true);
+    setLoadingBreakdown(true);
+    try {
+      const res = await api.getChipBreakdown(clubId, data.total_chips_in, "");
+      setBreakdownData({
+        items: res.items,
+        totalCount: res.total_chips_count,
+        totalValue: res.total_value,
+      });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingBreakdown(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
@@ -212,16 +238,26 @@ export default function PlayerSession() {
           <div className="bg-white rounded-2xl shadow-lg p-6">
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div className="text-center">
-                <p className="text-2xl font-bold text-gray-800">
-                  {data.total_chips_in}
+                <p className="text-xl font-bold text-gray-800">
+                  {pt.currency(data.total_chips_in - confirmedRebuyTotal)}
                 </p>
-                <p className="text-sm text-gray-500">{pt.player.chipsIn}</p>
+                <p className="text-xs text-gray-500 uppercase font-semibold">{pt.player.chipsIn}</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-gray-800">{rebuyCount}</p>
-                <p className="text-sm text-gray-500">{pt.player.rebuys}</p>
+                <p className="text-xl font-bold text-gray-800">
+                  {pt.currency(confirmedRebuyTotal)}
+                </p>
+                <p className="text-xs text-gray-500 uppercase font-semibold">{pt.player.rebuys}</p>
               </div>
             </div>
+
+            <button
+              onClick={fetchBreakdown}
+              className="w-full mb-3 bg-gray-100 text-gray-700 font-semibold py-2 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              🔍 {pt.player.verifyChips}
+            </button>
+
             <button
               onClick={handleRebuy}
               disabled={pixLoading}
@@ -248,6 +284,16 @@ export default function PlayerSession() {
         {pixError && (
           <p className="text-red-600 text-sm text-center">{pixError}</p>
         )}
+
+        {/* History link */}
+        <div className="text-center">
+          <a
+            href={`/history/${clubId}/${sessionId}/${token}`}
+            className="text-sm text-blue-600 hover:text-blue-800"
+          >
+            Ver meu desempenho geral
+          </a>
+        </div>
 
         {/* Transaction history */}
         {data.transactions.length > 0 && (
@@ -278,6 +324,50 @@ export default function PlayerSession() {
                   </span>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+        {/* Breakdown Modal */}
+        {showBreakdown && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl p-6 max-w-sm w-full">
+              <div className="flex justify-between items-center border-b pb-4 mb-4">
+                <h3 className="text-lg font-bold">{pt.player.verifyChips}</h3>
+                <button
+                  onClick={() => setShowBreakdown(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ×
+                </button>
+              </div>
+
+              {loadingBreakdown ? (
+                <div className="text-center py-6 text-gray-500">{pt.loading}</div>
+              ) : breakdownData ? (
+                <>
+                  <div className="text-center mb-4">
+                    <p className="text-xs text-gray-500 uppercase">{pt.player.totalChipsCount}</p>
+                    <p className="text-2xl font-bold text-gray-800">{breakdownData.totalCount}</p>
+                  </div>
+
+                  <div className="space-y-2 bg-gray-50 rounded-xl p-4">
+                    {breakdownData.items.map((it, i) => (
+                      <div key={i} className="flex justify-between items-center text-sm">
+                        <div className="flex items-center gap-2">
+                          <span 
+                            className="w-3 h-3 rounded-full border" 
+                            style={{ backgroundColor: it.color || "#ccc" }} 
+                          />
+                          <span className="font-medium">{it.label}</span>
+                        </div>
+                        <span className="text-gray-600">{it.count}x</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="text-center py-4 text-red-500 text-sm">{pt.error}</p>
+              )}
             </div>
           </div>
         )}
