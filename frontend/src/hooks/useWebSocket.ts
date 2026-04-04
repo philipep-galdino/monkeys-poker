@@ -29,6 +29,7 @@ export function useWebSocket({ sessionId, onEvent }: UseWebSocketOptions) {
     const ws = new WebSocket(url);
 
     ws.onopen = () => {
+      console.log("[WS] Conectado ao servidor:", url);
       setConnected(true);
       retriesRef.current = 0;
     };
@@ -43,7 +44,8 @@ export function useWebSocket({ sessionId, onEvent }: UseWebSocketOptions) {
       }
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
+      console.log(`[WS] Conexão encerrada (${event.code}):`, event.reason || "Sem motivo especificado");
       setConnected(false);
       wsRef.current = null;
 
@@ -53,7 +55,8 @@ export function useWebSocket({ sessionId, onEvent }: UseWebSocketOptions) {
       setTimeout(connect, delay);
     };
 
-    ws.onerror = () => {
+    ws.onerror = (error) => {
+      console.error("[WS] Erro na conexão:", error);
       ws.close();
     };
 
