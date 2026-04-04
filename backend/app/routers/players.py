@@ -7,15 +7,18 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models import PaymentPix, Session, SessionPlayer, Transaction
-from app.schemas import BuyinResponse, TransactionResponse
+from app.schemas import BuyinResponse
 from app.services.payment_service import payment_service
 from app.services.websocket_manager import manager
 
-router = APIRouter(prefix="/sessions/{session_id}/player/{token}", tags=["players"])
+router = APIRouter(
+    prefix="/clubs/{club_id}/sessions/{session_id}/player/{token}",
+    tags=["players"],
+)
 
 
 async def _get_session_player(
-    session_id: uuid.UUID, token: uuid.UUID, db: AsyncSession
+    club_id: uuid.UUID, session_id: uuid.UUID, token: uuid.UUID, db: AsyncSession
 ) -> tuple[Session, SessionPlayer]:
     """Shared lookup for session + session_player by token. Raises 404 if not found."""
     result = await db.execute(
@@ -24,7 +27,7 @@ async def _get_session_player(
         .options(selectinload(SessionPlayer.session), selectinload(SessionPlayer.transactions))
     )
     sp = result.scalar_one_or_none()
-    if not sp:
+    if not sp or sp.session.club_id != club_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Link inválido")
     return sp.session, sp
 
@@ -53,8 +56,13 @@ async def _create_pix_transaction(
                     expires_at=existing_pix.expires_at,
                 )
 
-    chip_count = int(amount)
+    rake = float(session.rake_buyin) if tx_type == "buy_in" else float(session.rake_rebuy)
+    chip_count = int(amount - rake)
     description = f"{'Buy-in' if tx_type == 'buy_in' else 'Rebuy'} {session.name}"
+
+    # Get physical count from session kits
+    kit = session.buyin_kit if tx_type == "buy_in" else session.rebuy_kit
+    physical_count = kit.get("total_chips_count", 0) if kit else 0
 
     # Create transaction record first (we need its ID for external_reference)
     transaction = Transaction(
@@ -62,6 +70,8 @@ async def _create_pix_transaction(
         type=tx_type,
         amount=amount,
         chip_count=chip_count,
+        physical_chip_count=physical_count,
+        rake_amount=rake,
         payment_method="pix",
         status="pending",
     )
@@ -103,12 +113,13 @@ async def _create_pix_transaction(
 
 @router.post("/buyin", response_model=BuyinResponse, status_code=status.HTTP_201_CREATED)
 async def create_buyin(
+    club_id: uuid.UUID,
     session_id: uuid.UUID,
     token: uuid.UUID,
     db: AsyncSession = Depends(get_db),
 ):
     """Generate a Pix QR code for the player's buy-in."""
-    session, sp = await _get_session_player(session_id, token, db)
+    session, sp = await _get_session_player(club_id, session_id, token, db)
 
     if session.status == "closed":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Sessão encerrada")
@@ -118,12 +129,13 @@ async def create_buyin(
 
 @router.post("/rebuy", response_model=BuyinResponse, status_code=status.HTTP_201_CREATED)
 async def create_rebuy(
+    club_id: uuid.UUID,
     session_id: uuid.UUID,
     token: uuid.UUID,
     db: AsyncSession = Depends(get_db),
 ):
     """Generate a Pix QR code for a rebuy."""
-    session, sp = await _get_session_player(session_id, token, db)
+    session, sp = await _get_session_player(club_id, session_id, token, db)
 
     if session.status == "closed":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Sessão encerrada")
