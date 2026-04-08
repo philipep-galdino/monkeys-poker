@@ -320,6 +320,10 @@ async def get_player_session(
     if not sp or sp.session.club_id != club_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Link inválido")
 
+    from app.services.chip_service import _parse_blind_value
+    blind_val = _parse_blind_value(sp.session.blinds_info or "0")
+    blinds_count = round(sp.total_chips_in / blind_val, 1) if blind_val > 0 and sp.total_chips_in > 0 else 0
+
     return PlayerSessionResponse(
         id=sp.id,
         session_id=sp.session_id,
@@ -329,6 +333,8 @@ async def get_player_session(
         total_chips_in=sp.total_chips_in,
         total_physical_chips=sp.total_physical_chips,
         total_chips_out=sp.total_chips_out,
+        blind_value=blind_val,
+        blinds_count=blinds_count,
         transactions=[TransactionResponse.model_validate(t) for t in sp.transactions],
     )
 

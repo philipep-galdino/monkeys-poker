@@ -94,7 +94,7 @@ export const pt = {
       createSessionSubmit: "Abrir Sessão",
       creating: "Abrindo...",
       sessionLabel: "Nome da Sessão",
-      blindsLabel: "Blinds",
+      blindsLabel: "Valor do Blind (R$)",
       buyinLabel: "Buy-in (R$)",
       rebuyLabel: "Rebuy (R$)",
       tableLimit: "Limite de Jogadores",

@@ -3,17 +3,21 @@ from decimal import Decimal
 from app.models import ChipDenomination
 
 
-def _parse_blinds(blinds_info: str) -> tuple[float, float]:
-    """Parse string like '1/2' or '5/10' into small blind and big blind values. Fallback to 0,0."""
+def _parse_blind_value(blinds_info: str) -> float:
+    """Parse blind value from string. Accepts a single number (e.g. '2') or legacy 'SB/BB' format."""
     try:
+        # Single number format (new)
+        return float(blinds_info.strip())
+    except ValueError:
+        pass
+    try:
+        # Legacy "SB/BB" format — use BB
         parts = blinds_info.split("/")
         if len(parts) >= 2:
-            sb = float(parts[0].strip())
-            bb = float(parts[1].strip())
-            return sb, bb
+            return float(parts[1].strip())
     except (ValueError, IndexError):
         pass
-    return 0.0, 0.0
+    return 0.0
 
 
 def calculate_buyin_kit(
@@ -26,15 +30,15 @@ def calculate_buyin_kit(
     Calcula um Kit de Buy-in inteligente focado em jogabilidade.
     Prioriza ~30 Big Blinds em fichas pequenas e mistura o restante com fichas grandes.
     """
-    sb_val, bb_val = _parse_blinds(blinds_info)
+    blind_val = _parse_blind_value(blinds_info)
     table_limit = max(1, table_limit)
-    
+
     # Ordena denominações ativas por valor (crescente)
     active = sorted(
         [d for d in denominations if d.active],
         key=lambda d: float(d.value)
     )
-    
+
     if not active:
         return {
             "items": [],
@@ -46,27 +50,27 @@ def calculate_buyin_kit(
     # Inventário disponível por jogador (reserva para todos na mesa)
     # Usamos string como chave para evitar problemas de float no dict
     inventory = {str(float(d.value)): (d.quantity if d.quantity > 0 else 999999) for d in active}
-    
+
     remaining_value = Decimal(str(amount))
     kit_items = []
-    
+
     def allocate(val_float: float, target_count: int):
         nonlocal remaining_value
         val_str = str(float(val_float))
-        
+
         if val_str not in inventory or target_count <= 0 or remaining_value <= 0:
             return 0
-        
+
         val_dec = Decimal(val_str)
-        
+
         # Máximo por jogador respeitando a reserva de mesa
         max_per_player = inventory[val_str] // table_limit
         actual_count = min(target_count, max_per_player)
-        
+
         # Limitado pelo valor restante
         max_by_value = int(remaining_value // val_dec)
         actual_count = min(actual_count, max_by_value)
-        
+
         if actual_count > 0:
             kit_items.append({
                 "value": float(val_float),
@@ -77,53 +81,48 @@ def calculate_buyin_kit(
             return actual_count
         return 0
 
-    # 1. Fase de Pilha Base (Base Stack): 
+    # 1. Fase de Pilha Base (Base Stack):
     # Tenta garantir que o jogador tenha pelo menos ~15-20 fichas para "sentir o stack"
     # Começa das menores denominações que fazem sentido para o valor total
-    base_target_units = 15
     for d in active:
         val = float(d.value)
         if remaining_value <= 0: break
-        
+
         # Não usa fichas que sozinhas comem mais de 50% do valor total nesta fase
         if Decimal(str(val)) > (Decimal(str(amount)) * Decimal("0.5")):
             continue
-            
+
         # Target: 10 a 15 fichas da menor denominação
         num_to_give = min(10, int(remaining_value // Decimal(str(val))))
         if num_to_give > 0:
             allocate(val, num_to_give)
 
-    # 2. Base de Jogabilidade: Alocar ~30 Big Blinds
-    if bb_val > 0 and remaining_value > 0:
-        target_bb_value = Decimal(str(bb_val)) * 30
-        if remaining_value < target_bb_value:
-            target_bb_value = remaining_value
-            
-        current_fill = Decimal("0")
-        
-        # Pequeno mix de SBs (se existirem e ainda não tivermos dado o suficiente)
-        if sb_val > 0:
-            # Tenta chegar a pelo menos 15-20 SBs no total
-            already_given = sum(item["count"] for item in kit_items if item["value"] == sb_val)
-            needed_sb = max(0, 20 - already_given)
-            if needed_sb > 0:
-                sb_qty = allocate(sb_val, needed_sb)
-                current_fill += Decimal(str(sb_val)) * sb_qty
-            
-        # Completa os 30 BBs com fichas de BB
-        already_given_bb = sum(item["count"] for item in kit_items if item["value"] == bb_val)
-        current_fill += Decimal(str(bb_val)) * already_given_bb
-        
-        if current_fill < target_bb_value:
-            needed_bb = int((target_bb_value - current_fill) // Decimal(str(bb_val)))
-            allocate(bb_val, needed_bb)
+    # 2. Base de Jogabilidade: Alocar ~30 blinds em fichas de valor igual ou próximo ao blind
+    if blind_val > 0 and remaining_value > 0:
+        target_blind_value = Decimal(str(blind_val)) * 30
+        if remaining_value < target_blind_value:
+            target_blind_value = remaining_value
+
+        # Find the denomination closest to blind value (equal or smaller)
+        blind_denom_val = None
+        for d in active:
+            v = float(d.value)
+            if v <= blind_val:
+                blind_denom_val = v
+
+        if blind_denom_val:
+            already_given = sum(item["count"] for item in kit_items if item["value"] == blind_denom_val)
+            current_fill = Decimal(str(blind_denom_val)) * already_given
+
+            if current_fill < target_blind_value:
+                needed = int((target_blind_value - current_fill) // Decimal(str(blind_denom_val)))
+                allocate(blind_denom_val, needed)
 
     # 3. Diversificação Progressiva (Fichas médias e grandes)
     for d in sorted(active, key=lambda d: float(d.value), reverse=True):
         val = float(d.value)
         if remaining_value <= 0: break
-        if val <= bb_val: continue # Já tratamos os blinds
+        if val <= blind_val: continue # Já tratamos os blinds
 
         # Tenta dar um mix (max 10 de cada inicialmente)
         max_v = int(remaining_value // Decimal(str(val)))

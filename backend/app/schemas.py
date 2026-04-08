@@ -204,6 +204,8 @@ class PlayerSessionResponse(BaseModel):
     total_chips_in: int
     total_physical_chips: int = 0
     total_chips_out: int
+    blind_value: float = 0
+    blinds_count: float = 0
     transactions: list[TransactionResponse] = []
 
     model_config = {"from_attributes": True}

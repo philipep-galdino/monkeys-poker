@@ -99,7 +99,7 @@ async def seed():
         print(f"  {len(players)} players created")
 
         # Calculate kits for sessions
-        buyin_kit, remaining_inv = calculate_buyin_kit(denoms, 100.0, "1/2", 9)
+        buyin_kit, remaining_inv = calculate_buyin_kit(denoms, 100.0, "2", 9)
         rebuy_kit = calculate_rebuy_kit(denoms, 100.0, 9, remaining_inv)
         buyin_physical = buyin_kit.get("total_chips_count", 0)
         rebuy_physical = rebuy_kit.get("total_chips_count", 0)
@@ -110,7 +110,7 @@ async def seed():
         s1 = Session(
             club_id=club.id,
             name="Cash Game - Terça",
-            blinds_info="1/2",
+            blinds_info="2",
             buy_in_amount=100.00,
             rebuy_amount=100.00,
             allow_rebuys=True,
@@ -209,7 +209,7 @@ async def seed():
         s2 = Session(
             club_id=club.id,
             name="Cash Game - Quinta",
-            blinds_info="2/5",
+            blinds_info="5",
             buy_in_amount=200.00,
             rebuy_amount=200.00,
             allow_rebuys=True,
@@ -300,7 +300,7 @@ async def seed():
         s3 = Session(
             club_id=club.id,
             name="Cash Game - Sábado",
-            blinds_info="1/2",
+            blinds_info="2",
             buy_in_amount=100.00,
             rebuy_amount=100.00,
             allow_rebuys=True,

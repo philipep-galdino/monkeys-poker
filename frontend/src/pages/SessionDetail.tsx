@@ -68,7 +68,7 @@ export default function SessionDetail() {
             <h1 className="text-2xl font-bold text-gray-800">{session.name}</h1>
             <p className="text-sm text-gray-500">
               {new Date(session.created_at).toLocaleDateString("pt-BR")} &middot;
-              Blinds {session.blinds_info} &middot;{" "}
+              Blind {pt.currency(parseFloat(session.blinds_info) || 0)} &middot;{" "}
               <span
                 className={
                   session.status === "open" ? "text-green-600" : "text-gray-400"

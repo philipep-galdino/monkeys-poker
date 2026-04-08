@@ -88,7 +88,7 @@ export default function TVLobby() {
             {data?.name ?? "PokerClub"}
           </h1>
           <p className="text-gray-400 text-lg">
-            {data?.blinds_info && `Blinds ${data.blinds_info}`} &middot; {now}
+            {data?.blinds_info && `Blind ${pt.currency(parseFloat(data.blinds_info) || 0)}`} &middot; {now}
           </p>
         </div>
         <div className="text-right">
@@ -124,7 +124,7 @@ export default function TVLobby() {
                     <tr className="text-gray-400 text-lg border-b border-gray-700">
                       <th className="text-left py-3 px-4">Nome</th>
                       <th className="text-center py-3 px-4">Status</th>
-                      <th className="text-right py-3 px-4">Fichas</th>
+                      <th className="text-right py-3 px-4">Valor Inicial em Fichas</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -148,11 +148,9 @@ export default function TVLobby() {
                           </span>
                         </td>
                         <td className="py-4 px-4 text-right text-2xl">
-                          {sp.total_physical_chips > 0
-                            ? sp.total_physical_chips
-                            : sp.total_chips_in > 0
-                              ? sp.total_chips_in
-                              : "\u2014"}
+                          {sp.total_chips_in > 0
+                            ? pt.currency(sp.total_chips_in)
+                            : "\u2014"}
                         </td>
                       </tr>
                     ))}
@@ -166,9 +164,8 @@ export default function TVLobby() {
                   {Array.from({ length: totalPages }, (_, i) => (
                     <span
                       key={i}
-                      className={`w-3 h-3 rounded-full ${
-                        i === currentPage ? "bg-poker-gold" : "bg-gray-600"
-                      }`}
+                      className={`w-3 h-3 rounded-full ${i === currentPage ? "bg-poker-gold" : "bg-gray-600"
+                        }`}
                     />
                   ))}
                 </div>

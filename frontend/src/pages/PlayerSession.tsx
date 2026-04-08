@@ -236,7 +236,7 @@ export default function PlayerSession() {
         {/* Active state — show chip info + rebuy */}
         {data.status === "active" && !pixData && !sessionClosed && (
           <div className="bg-white rounded-2xl shadow-lg p-6">
-            <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className={`grid ${data.blind_value > 0 ? "grid-cols-3" : "grid-cols-2"} gap-4 mb-4`}>
               <div className="text-center">
                 <p className="text-xl font-bold text-gray-800">
                   {pt.currency(data.total_chips_in - confirmedRebuyTotal)}
@@ -249,6 +249,14 @@ export default function PlayerSession() {
                 </p>
                 <p className="text-xs text-gray-500 uppercase font-semibold">{pt.player.rebuys}</p>
               </div>
+              {data.blind_value > 0 && (
+                <div className="text-center">
+                  <p className="text-xl font-bold text-gray-800">
+                    {data.blinds_count}
+                  </p>
+                  <p className="text-xs text-gray-500 uppercase font-semibold">Blinds</p>
+                </div>
+              )}
             </div>
 
             <button
