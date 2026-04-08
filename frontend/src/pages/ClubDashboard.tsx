@@ -166,42 +166,24 @@ export default function ClubDashboard() {
   };
 
   useEffect(() => {
-    if (!allowMultipleBuyins || !session) return;
+    if (!allowMultipleBuyins || !session || !clubId) return;
     const buyIns = parseInt(addPlayerForm.cashBuyIns) || 0;
-    
-    if (buyIns > 0 && session.buyin_kit && session.rebuy_kit) {
-      const itemsMap: Record<string, any> = {};
-      
-      // 1 buyin kit
-      session.buyin_kit.items.forEach(it => {
-        itemsMap[it.label] = { ...it };
-      });
-      
-      // remaining rebuys
-      const rebuys = buyIns - 1;
-      if (rebuys > 0) {
-        session.rebuy_kit.items.forEach(it => {
-          if (itemsMap[it.label]) {
-            itemsMap[it.label].count += it.count * rebuys;
-          } else {
-            itemsMap[it.label] = { ...it, count: it.count * rebuys };
-          }
-        });
-      }
-      
-      const combinedItems = Object.values(itemsMap).sort((a, b) => a.value - b.value);
-      const totalVal = session.buyin_kit!.total_value + Math.max(0, buyIns - 1) * session.rebuy_kit!.total_value;
-      
-      setBuyInsBreakdown({
-        items: combinedItems,
-        total_value: totalVal,
-        total_chips_count: combinedItems.reduce((acc, it) => acc + it.count, 0),
-        remainder: 0 // Assumed 0 as we use mapped kits
-      });
+
+    if (buyIns > 0) {
+      const chipValue =
+        (session.buy_in_amount - session.rake_buyin) +
+        Math.max(0, buyIns - 1) * (session.rebuy_amount - session.rake_rebuy);
+
+      api
+        .getChipBreakdown(clubId, chipValue, token)
+        .then((data) => {
+          setBuyInsBreakdown(data);
+        })
+        .catch(() => setBuyInsBreakdown(null));
     } else {
       setBuyInsBreakdown(null);
     }
-  }, [addPlayerForm.cashBuyIns, allowMultipleBuyins, session]);
+  }, [addPlayerForm.cashBuyIns, allowMultipleBuyins, session, clubId, token]);
 
   const openHistory = async (playerId: string) => {
     if (!clubId) return;
@@ -219,72 +201,24 @@ export default function ClubDashboard() {
   };
 
   const openBreakdown = async (sp: SessionPlayerData) => {
-    if (!session) return;
-    
+    if (!session || !clubId) return;
+
     setShowBreakdown(true);
     setLoadingBreakdown(true);
     setBreakdownData(null);
 
-    const buyinKit = session.buyin_kit;
-    const rebuyKit = session.rebuy_kit;
-    
-    // Scenario 1: Kits exist in session (Ideal)
-    if (buyinKit && rebuyKit) {
-      const buyinChipVal = buyinKit.total_value;
-      const rebuyChipVal = rebuyKit.total_value;
-
-      let rebuys = 0;
-      if (rebuyChipVal > 0 && sp.total_chips_in > buyinChipVal) {
-        rebuys = Math.floor((sp.total_chips_in - buyinChipVal) / rebuyChipVal);
-      }
-      
-      const itemsMap: Record<string, { label: string; color: string | null; count: number; value: number }> = {};
-      
-      buyinKit.items.forEach(item => {
-        itemsMap[item.label] = { ...item };
-      });
-      
-      if (rebuys > 0) {
-        rebuyKit.items.forEach(item => {
-          if (itemsMap[item.label]) {
-            itemsMap[item.label].count += item.count * rebuys;
-          } else {
-            itemsMap[item.label] = { ...item, count: item.count * rebuys };
-          }
-        });
-      }
-      
-      let totalCount = 0;
-      const finalItems = Object.values(itemsMap).sort((a, b) => a.value - b.value);
-      finalItems.forEach(it => totalCount += it.count);
-
+    try {
+      const data = await api.getChipBreakdown(clubId, sp.total_chips_in, token);
       setBreakdownData({
         name: sp.player.name,
-        totalValue: sp.total_chips_in,
-        totalCount: totalCount,
-        items: finalItems
+        totalValue: data.total_value,
+        totalCount: data.total_chips_count,
+        items: data.items,
       });
+    } catch (err) {
+      console.error(err);
+    } finally {
       setLoadingBreakdown(false);
-    } 
-    // Scenario 2: Kits missing -> Call general breakdown API (Fallback)
-    else {
-      try {
-        const data = await api.getChipBreakdown(clubId!, sp.total_chips_in, token, {
-          blinds_info: session.blinds_info,
-          table_limit: session.table_limit || 9
-        });
-        setBreakdownData({
-          name: sp.player.name,
-          totalValue: sp.total_chips_in,
-          totalCount: data.total_chips_count,
-          items: data.items,
-          isFallback: true
-        });
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoadingBreakdown(false);
-      }
     }
   };
 
@@ -307,6 +241,17 @@ export default function ClubDashboard() {
         `${sp.player.name}: MP status = ${result.mp_status}${result.updated ? " (updated)" : ""}`,
       );
       if (result.updated) await loadSession();
+    } catch (err) {
+      setActionMsg(err instanceof ApiError ? err.detail : "Error");
+    }
+  };
+
+  const handleRebuyCash = async (sp: SessionPlayerData) => {
+    if (!session || !clubId) return;
+    try {
+      await api.rebuyCash(clubId, session.id, sp.id, token);
+      setActionMsg(`Rebuy registrado para ${sp.player.name}`);
+      await loadSession();
     } catch (err) {
       setActionMsg(err instanceof ApiError ? err.detail : "Error");
     }
@@ -487,14 +432,16 @@ export default function ClubDashboard() {
                   {pt.admin.dashboard.blindsLabel}
                 </label>
                 <input
-                  type="text"
+                  type="number"
                   value={createForm.blinds_info}
                   onChange={(e) =>
                     setCreateForm({ ...createForm, blinds_info: e.target.value })
                   }
-                  placeholder="1/2"
+                  placeholder="2"
                   className="w-full px-3 py-2 border rounded-lg"
                   required
+                  min="0.01"
+                  step="any"
                 />
               </div>
               <div>
@@ -579,7 +526,7 @@ export default function ClubDashboard() {
               <div>
                 <h2 className="text-xl font-semibold">{session.name}</h2>
                 <p className="text-sm text-gray-500">
-                  Blinds {session.blinds_info} &middot; Buy-in{" "}
+                  Blind {pt.currency(parseFloat(session.blinds_info) || 0)} &middot; Buy-in{" "}
                   {pt.currency(session.buy_in_amount)} &middot;{" "}
                   <span
                     className={
@@ -634,9 +581,11 @@ export default function ClubDashboard() {
               </div>
               <div className="bg-gray-50 rounded-lg p-3 text-center">
                 <p className="text-2xl font-bold">
-                  {session.session_players.reduce(
-                    (sum, sp) => sum + (sp.total_physical_chips || 0),
-                    0,
+                  {pt.currency(
+                    session.session_players.reduce(
+                      (sum, sp) => sum + sp.total_chips_in,
+                      0,
+                    ),
                   )}
                 </p>
                 <p className="text-xs text-gray-500">{pt.admin.dashboard.summary.chipsIn}</p>
@@ -731,16 +680,16 @@ export default function ClubDashboard() {
                           onClick={() => openBreakdown(sp)}
                           className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
                         >
-                          {sp.total_physical_chips || 0}
+                          {pt.currency(sp.total_chips_in)}
                         </button>
                       ) : (
-                        sp.total_physical_chips || 0
+                        pt.currency(0)
                       )}
                     </td>
-                    <td className="py-3 text-right">{sp.total_chips_out}</td>
+                    <td className="py-3 text-right">{sp.total_chips_out > 0 ? pt.currency(sp.total_chips_out) : "—"}</td>
                     {session.status === "open" && (
                       <td className="py-3 text-right">
-                        <div className="flex gap-1 justify-end">
+                        <div className="flex gap-1 justify-end flex-wrap">
                           {sp.status === "waiting_payment" && (
                             <>
                               <button
@@ -749,22 +698,34 @@ export default function ClubDashboard() {
                               >
                                 {pt.admin.dashboard.actions.markCash}
                               </button>
-                              <button
-                                onClick={() => handleVerify(sp)}
-                                className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200"
-                              >
-                                {pt.admin.dashboard.actions.verifyPayment}
-                              </button>
+                              {sp.transactions.some(t => t.status === "pending") && (
+                                <button
+                                  onClick={() => handleVerify(sp)}
+                                  className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200"
+                                >
+                                  {pt.admin.dashboard.actions.verifyPayment}
+                                </button>
+                              )}
                             </>
                           )}
                           {sp.status === "active" && (
                             <>
-                              <button
-                                onClick={() => handleVerify(sp)}
-                                className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200"
-                              >
-                                {pt.admin.dashboard.actions.verifyPayment}
-                              </button>
+                              {session.allow_rebuys && (
+                                <button
+                                  onClick={() => handleRebuyCash(sp)}
+                                  className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs hover:bg-purple-200"
+                                >
+                                  Rebuy
+                                </button>
+                              )}
+                              {sp.transactions.some(t => t.status === "pending") && (
+                                <button
+                                  onClick={() => handleVerify(sp)}
+                                  className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200"
+                                >
+                                  {pt.admin.dashboard.actions.verifyPayment}
+                                </button>
+                              )}
                               <button
                                 onClick={() => setCashoutTarget(sp)}
                                 className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs hover:bg-orange-200"
@@ -797,13 +758,13 @@ export default function ClubDashboard() {
                 {pt.admin.modals.cashoutTitle} — {cashoutTarget.player.name}
               </h3>
               <p className="text-sm text-gray-500 mb-4">
-                Fichas em jogo: {cashoutTarget.total_physical_chips || 0} ({pt.currency(cashoutTarget.total_chips_in)})
+                Fichas em jogo: {pt.currency(cashoutTarget.total_chips_in)}
               </p>
               <input
                 type="number"
                 value={cashoutChips}
                 onChange={(e) => setCashoutChips(e.target.value)}
-                placeholder="Fichas devolvidas"
+                placeholder="Valor em fichas devolvidas"
                 className="w-full px-3 py-2 border rounded-lg mb-4"
                 min="0"
                 autoFocus
@@ -930,7 +891,7 @@ export default function ClubDashboard() {
                     <ul className="text-sm text-yellow-700 space-y-1">
                       {uncashedPlayers.map((p) => (
                         <li key={p.id}>
-                          {p.name} — {p.total_physical_chips || 0} fichas em jogo
+                          {p.name} — {pt.currency(p.total_chips_in)} em fichas
                         </li>
                       ))}
                     </ul>

@@ -103,6 +103,70 @@ async def mark_cash_payment(
 
 
 @router.post(
+    "/clubs/{club_id}/sessions/{session_id}/players/{session_player_id}/rebuy-cash",
+    response_model=CashPaymentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def rebuy_cash(
+    club_id: uuid.UUID,
+    session_id: uuid.UUID,
+    session_player_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _admin: str = Depends(get_current_admin),
+):
+    """Give an active player a cash rebuy."""
+    sp = await _get_session_player(club_id, session_id, session_player_id, db)
+    session = await db.get(Session, session_id)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sessão não encontrada")
+
+    if session.status == "closed":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Sessão encerrada")
+    if not session.allow_rebuys:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Rebuys não permitidos nesta sessão")
+    if sp.status != "active":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Jogador precisa estar ativo para rebuy")
+
+    amount = float(session.rebuy_amount)
+    rake = float(session.rake_rebuy)
+    chip_count = int(amount - rake)
+
+    kit = session.rebuy_kit
+    physical_count = kit.get("total_chips_count", 0) if kit else 0
+
+    transaction = Transaction(
+        session_player_id=sp.id,
+        type="rebuy",
+        amount=amount,
+        chip_count=chip_count,
+        physical_chip_count=physical_count,
+        rake_amount=rake,
+        payment_method="cash",
+        status="confirmed",
+    )
+    db.add(transaction)
+
+    sp.total_chips_in += chip_count
+    sp.total_physical_chips += physical_count
+    sp.updated_at = datetime.now(timezone.utc)
+    await db.flush()
+
+    await manager.broadcast(session_id, "payment_confirmed", {
+        "player_id": str(sp.player_id),
+        "player_name": sp.player.name,
+        "type": "rebuy",
+        "chips": chip_count,
+    })
+
+    return CashPaymentResponse(
+        transaction_id=transaction.id,
+        status=transaction.status,
+        amount=float(transaction.amount),
+        chip_count=chip_count,
+    )
+
+
+@router.post(
     "/clubs/{club_id}/sessions/{session_id}/players/{session_player_id}/verify",
     response_model=VerifyPaymentResponse,
 )

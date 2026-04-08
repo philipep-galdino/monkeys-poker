@@ -245,6 +245,8 @@ export const api = {
       total_chips_in: number;
       total_physical_chips: number;
       total_chips_out: number;
+      blind_value: number;
+      blinds_count: number;
       transactions: TransactionData[];
     }>(`/clubs/${clubId}/sessions/${sessionId}/player/${playerToken}`),
 
@@ -280,6 +282,17 @@ export const api = {
   ) =>
     request<Record<string, unknown>>(
       `/admin/clubs/${clubId}/sessions/${sessionId}/players/${sessionPlayerId}/cash`,
+      { method: "POST", token },
+    ),
+
+  rebuyCash: (
+    clubId: string,
+    sessionId: string,
+    sessionPlayerId: string,
+    token: string,
+  ) =>
+    request<{ transaction_id: string; status: string; amount: number; chip_count: number }>(
+      `/admin/clubs/${clubId}/sessions/${sessionId}/players/${sessionPlayerId}/rebuy-cash`,
       { method: "POST", token },
     ),
 
