@@ -26,6 +26,7 @@ class PaymentService:
         amount: float,
         description: str,
         external_reference: str,
+        payer_email: str = "",
     ) -> dict:
         """Create a Pix payment and return QR code data.
 
@@ -50,10 +51,11 @@ class PaymentService:
                 "expires_at": expires_at,
             }
 
+        email = payer_email or "pagamento@pokerclub.local"
         payment_data = {
             "transaction_amount": float(amount),
             "payment_method_id": "pix",
-            "payer": {"email": "player@pokerclub.local"},
+            "payer": {"email": email},
             "description": description,
             "external_reference": external_reference,
         }

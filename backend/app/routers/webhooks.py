@@ -1,3 +1,6 @@
+import hashlib
+import hmac
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Request, status
@@ -6,10 +9,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.database import async_session
 from app.models import PaymentPix, SessionPlayer, Transaction
 from app.services.payment_service import payment_service
 from app.services.websocket_manager import manager
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
@@ -50,6 +56,51 @@ async def _process_rejected_payment(
     await db.flush()
 
 
+def _verify_mp_signature(request: Request, data_id: str) -> bool:
+    """Validate Mercado Pago webhook signature using HMAC-SHA256.
+
+    MP sends:
+      x-signature: ts=<timestamp>,v1=<hash>
+      x-request-id: <request-id>
+
+    Manifest to sign: "id:<data.id>;request-id:<x-request-id>;ts:<ts>;"
+    """
+    secret = settings.mp_webhook_secret
+    if not secret:
+        # No secret configured — skip validation (dev/mock mode)
+        return True
+
+    sig_header = request.headers.get("x-signature", "")
+    request_id = request.headers.get("x-request-id", "")
+
+    if not sig_header:
+        logger.warning("Webhook missing x-signature header")
+        return False
+
+    # Parse "ts=123456,v1=abcdef..." from header
+    parts = {}
+    for part in sig_header.split(","):
+        kv = part.split("=", 1)
+        if len(kv) == 2:
+            parts[kv[0].strip()] = kv[1].strip()
+
+    ts = parts.get("ts", "")
+    v1 = parts.get("v1", "")
+    if not ts or not v1:
+        logger.warning("Webhook x-signature missing ts or v1")
+        return False
+
+    # Build the manifest string per MP docs
+    manifest = f"id:{data_id};request-id:{request_id};ts:{ts};"
+    expected = hmac.new(secret.encode(), manifest.encode(), hashlib.sha256).hexdigest()
+
+    if not hmac.compare_digest(expected, v1):
+        logger.warning("Webhook signature mismatch")
+        return False
+
+    return True
+
+
 @router.post("/mercadopago", status_code=status.HTTP_200_OK)
 async def mercadopago_webhook(request: Request):
     """Handle Mercado Pago payment notifications.
@@ -68,6 +119,10 @@ async def mercadopago_webhook(request: Request):
     mp_payment_id = str(body.get("data", {}).get("id", ""))
     if not mp_payment_id:
         return JSONResponse({"status": "no_payment_id"})
+
+    if not _verify_mp_signature(request, mp_payment_id):
+        logger.warning("Rejected webhook with invalid signature for payment %s", mp_payment_id)
+        return JSONResponse({"status": "invalid_signature"})
 
     try:
         async with async_session() as db:
@@ -114,6 +169,6 @@ async def mercadopago_webhook(request: Request):
             await db.commit()
 
     except Exception:
-        pass  # Always return 200
+        logger.exception("Error processing webhook for payment %s", mp_payment_id)
 
     return JSONResponse({"status": "ok"})

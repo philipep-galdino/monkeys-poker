@@ -24,7 +24,7 @@ async def _get_session_player(
     result = await db.execute(
         select(SessionPlayer)
         .where(SessionPlayer.session_id == session_id, SessionPlayer.token == token)
-        .options(selectinload(SessionPlayer.session), selectinload(SessionPlayer.transactions))
+        .options(selectinload(SessionPlayer.session), selectinload(SessionPlayer.player), selectinload(SessionPlayer.transactions))
     )
     sp = result.scalar_one_or_none()
     if not sp or sp.session.club_id != club_id:
@@ -78,12 +78,17 @@ async def _create_pix_transaction(
     db.add(transaction)
     await db.flush()
 
+    # Build a per-player email for MP (they require an email field)
+    player_phone = sp.player.phone if sp.player else ""
+    payer_email = f"jogador.{player_phone}@pokerclub.local" if player_phone else ""
+
     # Call MP API — if it fails, rollback the transaction record
     try:
         mp_data = payment_service.create_pix_payment(
             amount=amount,
             description=description,
             external_reference=str(transaction.id),
+            payer_email=payer_email,
         )
     except Exception:
         await db.rollback()
