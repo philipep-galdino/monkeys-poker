@@ -30,11 +30,15 @@ jobs:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
         run: |
+          # Strip any stray whitespace from secrets (guards against trailing newline in GH secret)
+          SERVER_HOST="$(echo -n "$SERVER_HOST" | tr -d '[:space:]')"
+          SERVER_USER="$(echo -n "$SERVER_USER" | tr -d '[:space:]')"
+
           # Setup SSH
           mkdir -p ~/.ssh
           echo "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H $SERVER_HOST >> ~/.ssh/known_hosts 2>/dev/null
+          ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
           SSH_CMD="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST"
 
