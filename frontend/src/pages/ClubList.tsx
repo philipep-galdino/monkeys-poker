@@ -13,6 +13,13 @@ export default function ClubList() {
 
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState({ name: "", slug: "" });
+  const [includeOwner, setIncludeOwner] = useState(false);
+  const [ownerForm, setOwnerForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    password: "",
+  });
 
   const loadClubs = useCallback(async () => {
     try {
@@ -37,10 +44,14 @@ export default function ClubList() {
     e.preventDefault();
     setError("");
     try {
-      const club = await api.createClub(
-        { name: createForm.name, slug: createForm.slug },
-        token,
-      );
+      const payload: Record<string, unknown> = {
+        name: createForm.name,
+        slug: createForm.slug,
+      };
+      if (includeOwner) {
+        payload.owner = ownerForm;
+      }
+      const club = await api.createClub(payload, token);
       navigate(`/admin/clubs/${club.id}`);
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : pt.error);
@@ -133,6 +144,55 @@ export default function ClubList() {
                 <p className="text-xs text-gray-400 mt-1">
                   Apenas letras minúsculas, números e traços
                 </p>
+              </div>
+              <div className="border-t border-gray-200 pt-4">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includeOwner}
+                    onChange={(e) => setIncludeOwner(e.target.checked)}
+                    className="rounded"
+                  />
+                  {pt.admin.owner.sectionTitle}
+                </label>
+                {includeOwner && (
+                  <div className="space-y-3 pl-6">
+                    <p className="text-xs text-gray-500">{pt.admin.owner.sectionDesc}</p>
+                    <input
+                      type="text"
+                      value={ownerForm.name}
+                      onChange={(e) => setOwnerForm({ ...ownerForm, name: e.target.value })}
+                      placeholder={pt.admin.owner.nameLabel}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      required={includeOwner}
+                    />
+                    <input
+                      type="email"
+                      value={ownerForm.email}
+                      onChange={(e) => setOwnerForm({ ...ownerForm, email: e.target.value })}
+                      placeholder={pt.admin.owner.emailLabel}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      required={includeOwner}
+                    />
+                    <input
+                      type="tel"
+                      value={ownerForm.phone}
+                      onChange={(e) => setOwnerForm({ ...ownerForm, phone: e.target.value })}
+                      placeholder={pt.admin.owner.phoneLabel}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      required={includeOwner}
+                    />
+                    <input
+                      type="password"
+                      value={ownerForm.password}
+                      onChange={(e) => setOwnerForm({ ...ownerForm, password: e.target.value })}
+                      placeholder={pt.admin.owner.passwordLabel}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      minLength={6}
+                      required={includeOwner}
+                    />
+                  </div>
+                )}
               </div>
               <div className="flex gap-2">
                 <button

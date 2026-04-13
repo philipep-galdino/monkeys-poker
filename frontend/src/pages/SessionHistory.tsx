@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiError, SessionResponse } from "@/api/client";
+import { useAppMode } from "@/hooks/useAppMode";
 import { pt } from "@/strings";
 
 export default function SessionHistory() {
   const { clubId } = useParams<{ clubId: string }>();
   const navigate = useNavigate();
   const token = localStorage.getItem("admin_token") ?? "";
+  const { basePath, loginPath } = useAppMode(clubId);
 
   const [sessions, setSessions] = useState<SessionResponse[]>([]);
   const [total, setTotal] = useState(0);
@@ -22,12 +24,12 @@ export default function SessionHistory() {
       setTotal(result.total);
     } catch (err) {
       if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
-        navigate("/admin");
+        navigate(loginPath);
       }
     } finally {
       setLoading(false);
     }
-  }, [clubId, token, page, navigate]);
+  }, [clubId, token, page, navigate, loginPath]);
 
   useEffect(() => {
     load();
@@ -48,7 +50,7 @@ export default function SessionHistory() {
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center gap-4 mb-6">
           <button
-            onClick={() => navigate(`/admin/clubs/${clubId}`)}
+            onClick={() => navigate(basePath)}
             className="text-sm text-gray-500 hover:text-gray-700"
           >
             &larr; Painel
@@ -78,7 +80,7 @@ export default function SessionHistory() {
                   <tr
                     key={s.id}
                     className="border-b hover:bg-gray-50 cursor-pointer"
-                    onClick={() => navigate(`/admin/clubs/${clubId}/sessions/${s.id}`)}
+                    onClick={() => navigate(`${basePath}/sessions/${s.id}`)}
                   >
                     <td className="py-3 px-4 font-medium">{s.name}</td>
                     <td className="py-3 px-4 text-gray-500">

@@ -4,12 +4,19 @@ import TVLobby from "@/pages/TVLobby";
 import PlayerJoin from "@/pages/PlayerJoin";
 import PlayerSession from "@/pages/PlayerSession";
 import AdminLogin from "@/pages/AdminLogin";
+import OwnerLogin from "@/pages/OwnerLogin";
+import OwnerDashboard from "@/pages/OwnerDashboard";
+import Register from "@/pages/Register";
+import OwnerOnboarding from "@/pages/OwnerOnboarding";
+import OwnerProfile from "@/pages/OwnerProfile";
 import ClubList from "@/pages/ClubList";
 import ClubDashboard from "@/pages/ClubDashboard";
 import ClubSettings from "@/pages/ClubSettings";
 import SessionHistory from "@/pages/SessionHistory";
 import SessionDetail from "@/pages/SessionDetail";
 import PlayerHistory from "@/pages/PlayerHistory";
+import CashKingLeaderboard from "@/pages/CashKingLeaderboard";
+import ClubLanding from "@/pages/ClubLanding";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,13 +32,26 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
-          {/* Admin */}
+          {/* Admin (superadmin only) */}
           <Route path="/admin" element={<AdminLogin />} />
           <Route path="/admin/clubs" element={<ClubList />} />
           <Route path="/admin/clubs/:clubId" element={<ClubDashboard />} />
           <Route path="/admin/clubs/:clubId/settings" element={<ClubSettings />} />
           <Route path="/admin/clubs/:clubId/history" element={<SessionHistory />} />
+          <Route path="/admin/clubs/:clubId/cash-king" element={<CashKingLeaderboard />} />
           <Route path="/admin/clubs/:clubId/sessions/:sessionId" element={<SessionDetail />} />
+
+          {/* Owner (club owner) */}
+          <Route path="/register" element={<Register />} />
+          <Route path="/owner" element={<OwnerLogin />} />
+          <Route path="/owner/dashboard" element={<OwnerDashboard />} />
+          <Route path="/owner/profile" element={<OwnerProfile />} />
+          <Route path="/owner/club/:clubId" element={<ClubDashboard />} />
+          <Route path="/owner/club/:clubId/settings" element={<ClubSettings />} />
+          <Route path="/owner/club/:clubId/history" element={<SessionHistory />} />
+          <Route path="/owner/club/:clubId/cash-king" element={<CashKingLeaderboard />} />
+          <Route path="/owner/club/:clubId/setup" element={<OwnerOnboarding />} />
+          <Route path="/owner/club/:clubId/sessions/:sessionId" element={<SessionDetail />} />
 
           {/* Player-facing (club-scoped) */}
           <Route path="/tv/:clubId/:sessionId" element={<TVLobby />} />
@@ -44,6 +64,8 @@ export default function App() {
             path="/history/:clubId/:sessionId/:token"
             element={<PlayerHistory />}
           />
+          <Route path="/clubs/:clubId/cash-king" element={<CashKingLeaderboard />} />
+          <Route path="/c/:slug" element={<ClubLanding />} />
 
           {/* 404 */}
           <Route

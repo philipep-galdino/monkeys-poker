@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiError, ChipDenominationData, ClubResponse } from "@/api/client";
+import { useAppMode } from "@/hooks/useAppMode";
 import { pt } from "@/strings";
 
 type ChipRow = {
@@ -25,6 +26,7 @@ export default function ClubSettings() {
   const { clubId } = useParams<{ clubId: string }>();
   const navigate = useNavigate();
   const token = localStorage.getItem("admin_token") ?? "";
+  const { basePath, loginPath } = useAppMode(clubId);
 
   const [club, setClub] = useState<ClubResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,6 +40,23 @@ export default function ClubSettings() {
   const [rakebuyin, setRakeBuyin] = useState("");
   const [rakerebuy, setRakeRebuy] = useState("");
   const [allowMultipleBuyins, setAllowMultipleBuyins] = useState(false);
+
+  // Payment settings
+  const [paymentMode, setPaymentMode] = useState("static_pix");
+  const [pixKey, setPixKey] = useState("");
+  const [mpAccessToken, setMpAccessToken] = useState("");
+  const [mpWebhookSecret, setMpWebhookSecret] = useState("");
+  const [hasMpCredentials, setHasMpCredentials] = useState(false);
+
+  // Theme settings
+  const [logoUrl, setLogoUrl] = useState("");
+  const [primaryColor, setPrimaryColor] = useState("#d4a937");
+  const [accentColor, setAccentColor] = useState("#1a5c38");
+  const [bgColor, setBgColor] = useState("#0f1419");
+  const [textColor, setTextColor] = useState("#e5e7eb");
+  const [bgImageUrl, setBgImageUrl] = useState("");
+  const [fontFamily, setFontFamily] = useState("Inter");
+  const [tvLayout, setTvLayout] = useState("classic");
 
   // Chip denominations
   const [chips, setChips] = useState<ChipRow[]>([]);
@@ -55,6 +74,17 @@ export default function ClubSettings() {
       setRakeBuyin(String(c.default_rake_buyin));
       setRakeRebuy(String(c.default_rake_rebuy));
       setAllowMultipleBuyins(c.allow_multiple_buyins || false);
+      setPaymentMode(c.payment_mode || "static_pix");
+      setPixKey(c.pix_key ?? "");
+      setHasMpCredentials(c.has_mp_credentials || false);
+      setLogoUrl(c.logo_url ?? "");
+      setPrimaryColor(c.primary_color || "#d4a937");
+      setAccentColor(c.accent_color || "#1a5c38");
+      setBgColor(c.bg_color || "#0f1419");
+      setTextColor(c.text_color || "#e5e7eb");
+      setBgImageUrl(c.bg_image_url ?? "");
+      setFontFamily(c.font_family || "Inter");
+      setTvLayout(c.tv_layout || "classic");
 
       if (denoms.length > 0) {
         setChips(
@@ -72,14 +102,14 @@ export default function ClubSettings() {
       }
     } catch (err) {
       if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
-        navigate("/admin");
+        navigate(loginPath);
         return;
       }
       setError(pt.error);
     } finally {
       setLoading(false);
     }
-  }, [clubId, token, navigate]);
+  }, [clubId, token, navigate, loginPath]);
 
   useEffect(() => {
     load();
@@ -93,18 +123,31 @@ export default function ClubSettings() {
     setError("");
 
     try {
-      // Update club settings
-      await api.updateClub(
-        clubId,
-        {
-          name: clubName,
-          description: clubDesc || null,
-          default_rake_buyin: parseFloat(rakebuyin) || 0,
-          default_rake_rebuy: parseFloat(rakerebuy) || 0,
-          allow_multiple_buyins: allowMultipleBuyins,
-        },
-        token,
-      );
+      // Update club settings (including payment config)
+      const updateData: Record<string, unknown> = {
+        name: clubName,
+        description: clubDesc || null,
+        default_rake_buyin: parseFloat(rakebuyin) || 0,
+        default_rake_rebuy: parseFloat(rakerebuy) || 0,
+        allow_multiple_buyins: allowMultipleBuyins,
+        payment_mode: paymentMode,
+        pix_key: pixKey || null,
+      };
+      // Only send MP credentials if they were filled in (never overwrite with empty)
+      if (mpAccessToken) updateData.mp_access_token = mpAccessToken;
+      if (mpWebhookSecret) updateData.mp_webhook_secret = mpWebhookSecret;
+
+      // Theme
+      updateData.logo_url = logoUrl || null;
+      updateData.primary_color = primaryColor;
+      updateData.accent_color = accentColor;
+      updateData.bg_color = bgColor;
+      updateData.text_color = textColor;
+      updateData.bg_image_url = bgImageUrl || null;
+      updateData.font_family = fontFamily;
+      updateData.tv_layout = tvLayout;
+
+      await api.updateClub(clubId, updateData, token);
 
       // Update chip denominations (filter out empty rows)
       const validChips = chips
@@ -153,7 +196,7 @@ export default function ClubSettings() {
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center gap-4 mb-6">
           <button
-            onClick={() => navigate(`/admin/clubs/${clubId}`)}
+            onClick={() => navigate(basePath)}
             className="text-sm text-gray-500 hover:text-gray-700"
           >
             &larr; Painel
@@ -248,6 +291,219 @@ export default function ClubSettings() {
             </div>
           </div>
 
+          {/* Payment Configuration */}
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <h2 className="text-lg font-semibold mb-2 text-gray-800">{pt.admin.settings.paymentConfig}</h2>
+            <p className="text-sm text-gray-400 mb-4">
+              Escolha como os jogadores pagam buy-ins e rebuys.
+            </p>
+
+            <div className="space-y-3 mb-4">
+              <label
+                className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                  paymentMode === "static_pix" ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="paymentMode"
+                  value="static_pix"
+                  checked={paymentMode === "static_pix"}
+                  onChange={() => setPaymentMode("static_pix")}
+                  className="mt-1"
+                />
+                <div>
+                  <p className="font-medium text-gray-800">{pt.admin.settings.paymentModeStaticPix} <span className="text-xs text-green-600 font-normal ml-1">Recomendado</span></p>
+                  <p className="text-xs text-gray-500 mt-0.5">{pt.admin.settings.paymentModeStaticPixDesc}</p>
+                </div>
+              </label>
+
+              <label
+                className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                  paymentMode === "mercado_pago" ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="paymentMode"
+                  value="mercado_pago"
+                  checked={paymentMode === "mercado_pago"}
+                  onChange={() => setPaymentMode("mercado_pago")}
+                  className="mt-1"
+                />
+                <div>
+                  <p className="font-medium text-gray-800">{pt.admin.settings.paymentModeMP}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{pt.admin.settings.paymentModeMPDesc}</p>
+                </div>
+              </label>
+            </div>
+
+            {/* Static Pix fields */}
+            {paymentMode === "static_pix" && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {pt.admin.settings.pixKeyLabel}
+                </label>
+                <input
+                  type="text"
+                  value={pixKey}
+                  onChange={(e) => setPixKey(e.target.value)}
+                  placeholder={pt.admin.settings.pixKeyPlaceholder}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+            )}
+
+            {/* Mercado Pago fields */}
+            {paymentMode === "mercado_pago" && (
+              <div className="space-y-3">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <p className="text-xs text-yellow-800">{pt.admin.settings.mpFeeWarning}</p>
+                </div>
+
+                {hasMpCredentials && !mpAccessToken && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-2">
+                    <p className="text-xs text-green-700">{pt.admin.settings.mpCredentialsConfigured}</p>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {pt.admin.settings.mpAccessTokenLabel}
+                  </label>
+                  <input
+                    type="password"
+                    value={mpAccessToken}
+                    onChange={(e) => setMpAccessToken(e.target.value)}
+                    placeholder={hasMpCredentials ? "••••••••" : "APP_USR-..."}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {pt.admin.settings.mpWebhookSecretLabel}
+                  </label>
+                  <input
+                    type="password"
+                    value={mpWebhookSecret}
+                    onChange={(e) => setMpWebhookSecret(e.target.value)}
+                    placeholder={hasMpCredentials ? "••••••••" : "Webhook secret do MP"}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Theme Builder */}
+          <div className="bg-white rounded-xl shadow-md p-6">
+            <h2 className="text-lg font-semibold mb-4 text-gray-800">{pt.admin.theme.title}</h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {pt.admin.theme.logoUrl}
+                </label>
+                <input
+                  type="url"
+                  value={logoUrl}
+                  onChange={(e) => setLogoUrl(e.target.value)}
+                  placeholder={pt.admin.theme.logoPlaceholder}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+                {logoUrl && (
+                  <img
+                    src={logoUrl}
+                    alt="logo"
+                    className="mt-2 h-12 object-contain"
+                    onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
+                  />
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Imagem de Fundo (URL)
+                </label>
+                <input
+                  type="url"
+                  value={bgImageUrl}
+                  onChange={(e) => setBgImageUrl(e.target.value)}
+                  placeholder="https://exemplo.com/bg.jpg"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <ColorField label={pt.admin.theme.primaryColor} value={primaryColor} onChange={setPrimaryColor} />
+                <ColorField label={pt.admin.theme.accentColor} value={accentColor} onChange={setAccentColor} />
+                <ColorField label={pt.admin.theme.bgColor} value={bgColor} onChange={setBgColor} />
+                <ColorField label={pt.admin.theme.textColor} value={textColor} onChange={setTextColor} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {pt.admin.theme.fontFamily}
+                  </label>
+                  <select
+                    value={fontFamily}
+                    onChange={(e) => setFontFamily(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  >
+                    <option value="Inter">Inter</option>
+                    <option value="Roboto">Roboto</option>
+                    <option value="Poppins">Poppins</option>
+                    <option value="Montserrat">Montserrat</option>
+                    <option value="system-ui">Sistema</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {pt.admin.theme.tvLayout}
+                  </label>
+                  <select
+                    value={tvLayout}
+                    onChange={(e) => setTvLayout(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  >
+                    <option value="classic">{pt.admin.theme.layoutClassic}</option>
+                    <option value="cards">{pt.admin.theme.layoutCards}</option>
+                    <option value="minimal">{pt.admin.theme.layoutMinimal}</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Live preview */}
+              <div>
+                <p className="text-xs text-gray-500 mb-2">{pt.admin.theme.preview}</p>
+                <div
+                  className="rounded-lg p-4 border"
+                  style={{
+                    backgroundColor: bgColor,
+                    color: textColor,
+                    fontFamily,
+                  }}
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    {logoUrl && <img src={logoUrl} alt="" className="h-8 object-contain" />}
+                    <span className="font-bold text-lg" style={{ color: primaryColor }}>
+                      {clubName || "Meu Clube"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 rounded text-sm font-semibold"
+                    style={{ backgroundColor: accentColor, color: textColor }}
+                  >
+                    Botão
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Chip Denominations */}
           <div className="bg-white rounded-xl shadow-md p-6">
             <div className="flex items-center justify-between mb-4">
@@ -332,6 +588,37 @@ export default function ClubSettings() {
             {saving ? pt.admin.clubs.saving : pt.admin.clubs.saveSettings}
           </button>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function ColorField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <div className="flex gap-2 items-center">
+        <input
+          type="color"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-10 w-12 rounded border cursor-pointer"
+        />
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="flex-1 px-3 py-2 border rounded-lg font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+          maxLength={7}
+        />
       </div>
     </div>
   );

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiError, SessionDetailResponse } from "@/api/client";
+import { useAppMode } from "@/hooks/useAppMode";
 import { pt } from "@/strings";
 
 export default function SessionDetail() {
   const { clubId, sessionId } = useParams<{ clubId: string; sessionId: string }>();
   const navigate = useNavigate();
+  const { basePath } = useAppMode(clubId);
 
   const [session, setSession] = useState<SessionDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -59,7 +61,7 @@ export default function SessionDetail() {
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center gap-4 mb-6">
           <button
-            onClick={() => navigate(`/admin/clubs/${clubId}/history`)}
+            onClick={() => navigate(`${basePath}/history`)}
             className="text-sm text-gray-500 hover:text-gray-700"
           >
             &larr; Histórico
