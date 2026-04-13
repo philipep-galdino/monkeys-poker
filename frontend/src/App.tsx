@@ -17,6 +17,7 @@ import SessionDetail from "@/pages/SessionDetail";
 import PlayerHistory from "@/pages/PlayerHistory";
 import CashKingLeaderboard from "@/pages/CashKingLeaderboard";
 import ClubLanding from "@/pages/ClubLanding";
+import Landing from "@/pages/Landing";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,6 +33,9 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
+          {/* Public landing */}
+          <Route path="/" element={<Landing />} />
+
           {/* Admin (superadmin only) */}
           <Route path="/admin" element={<AdminLogin />} />
           <Route path="/admin/clubs" element={<ClubList />} />
