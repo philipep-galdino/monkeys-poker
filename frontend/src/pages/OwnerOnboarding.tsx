@@ -68,6 +68,7 @@ export default function OwnerOnboarding() {
     blinds_info: "",
     buy_in_amount: "",
     rebuy_amount: "",
+    cash_king_enabled: false,
   });
 
   const stepIndex = STEP_ORDER.indexOf(step);
@@ -149,7 +150,7 @@ export default function OwnerOnboarding() {
           buy_in_amount: parseFloat(sessionForm.buy_in_amount),
           rebuy_amount: parseFloat(sessionForm.rebuy_amount),
           allow_rebuys: true,
-          cash_king_enabled: false,
+          cash_king_enabled: sessionForm.cash_king_enabled,
         },
         token,
       );
@@ -648,6 +649,17 @@ export default function OwnerOnboarding() {
                   />
                 </div>
               </div>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={sessionForm.cash_king_enabled}
+                  onChange={(e) => setSessionForm({ ...sessionForm, cash_king_enabled: e.target.checked })}
+                  className="w-4 h-4 rounded"
+                  style={{ accentColor: primary }}
+                />
+                <span className="text-sm" style={labelStyle}>{pt.cashKing.enableLabel}</span>
+              </label>
 
               {error && <p className="text-red-400 text-sm text-center">{error}</p>}
 
