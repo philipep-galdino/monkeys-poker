@@ -113,3 +113,124 @@ body {
 .ck-row-bronze {
   background: linear-gradient(90deg, rgba(205, 127, 50, 0.10) 0%, rgba(205, 127, 50, 0.02) 100%);
 }
+
+/* ── Club theme utility classes ─────────────────────────────────
+   Every owner/admin page that renders inside a club context should
+   apply these so the UI follows the club's theme instead of a hard-
+   coded palette. Relies on the --club-* CSS vars set by useClubTheme.
+*/
+
+.themed-shell {
+  background-color: var(--club-bg);
+  color: var(--club-text);
+  font-family: var(--club-font);
+  min-height: 100vh;
+}
+
+.themed-card {
+  background-color: color-mix(in srgb, var(--club-bg) 86%, white);
+  border: 1px solid color-mix(in srgb, var(--club-text) 12%, transparent);
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.themed-heading {
+  color: var(--club-text);
+  font-weight: 600;
+}
+
+.themed-muted {
+  color: color-mix(in srgb, var(--club-text) 55%, transparent);
+}
+
+.themed-label {
+  color: color-mix(in srgb, var(--club-text) 80%, transparent);
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.themed-input,
+.themed-select,
+.themed-textarea {
+  background-color: color-mix(in srgb, var(--club-bg) 70%, black);
+  border: 1px solid color-mix(in srgb, var(--club-text) 18%, transparent);
+  color: var(--club-text);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  width: 100%;
+}
+
+.themed-input::placeholder,
+.themed-textarea::placeholder {
+  color: color-mix(in srgb, var(--club-text) 40%, transparent);
+}
+
+.themed-input:focus,
+.themed-select:focus,
+.themed-textarea:focus {
+  border-color: var(--club-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--club-primary) 30%, transparent);
+}
+
+/* Fix white-on-white option lists: force dark bg + light text on options */
+.themed-select option,
+select option {
+  background-color: #0f1419;
+  color: #e5e7eb;
+}
+
+.themed-btn-primary {
+  background-color: var(--club-primary);
+  color: color-mix(in srgb, var(--club-bg) 90%, black);
+  font-weight: 700;
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.5rem;
+  transition: filter 0.15s, transform 0.15s;
+  border: none;
+  cursor: pointer;
+}
+.themed-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.themed-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.themed-btn-accent {
+  background-color: var(--club-accent);
+  color: var(--club-text);
+  font-weight: 600;
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.5rem;
+  transition: filter 0.15s;
+  border: none;
+  cursor: pointer;
+}
+.themed-btn-accent:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+.themed-btn-accent:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.themed-btn-ghost {
+  background: transparent;
+  color: color-mix(in srgb, var(--club-text) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--club-text) 18%, transparent);
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.5rem;
+  transition: background-color 0.15s, color 0.15s;
+  cursor: pointer;
+}
+.themed-btn-ghost:hover {
+  background-color: color-mix(in srgb, var(--club-text) 8%, transparent);
+  color: var(--club-text);
+}
+
+.themed-divider {
+  border-color: color-mix(in srgb, var(--club-text) 10%, transparent);
+}
