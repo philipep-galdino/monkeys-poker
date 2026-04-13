@@ -29,19 +29,50 @@ class Base(DeclarativeBase):
     pass
 
 
+class ClubOwner(Base):
+    __tablename__ = "club_owners"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    email: Mapped[str] = mapped_column(String(200), unique=True, nullable=False)
+    phone: Mapped[str] = mapped_column(String(20), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    clubs: Mapped[list["Club"]] = relationship(back_populates="owner")
+
+
 class Club(Base):
     __tablename__ = "clubs"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("club_owners.id", ondelete="SET NULL"), nullable=True
+    )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
     default_rake_buyin: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
     default_rake_rebuy: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
     allow_multiple_buyins: Mapped[bool] = mapped_column(Boolean, server_default=text("false"), default=False)
+    payment_mode: Mapped[str] = mapped_column(String(20), server_default=text("'static_pix'"), default="static_pix")
+    pix_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    mp_access_token: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    mp_webhook_secret: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Theme
+    logo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    primary_color: Mapped[str] = mapped_column(String(7), server_default=text("'#d4a937'"), default="#d4a937")
+    accent_color: Mapped[str] = mapped_column(String(7), server_default=text("'#1a5c38'"), default="#1a5c38")
+    bg_color: Mapped[str] = mapped_column(String(7), server_default=text("'#0f1419'"), default="#0f1419")
+    text_color: Mapped[str] = mapped_column(String(7), server_default=text("'#e5e7eb'"), default="#e5e7eb")
+    bg_image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    font_family: Mapped[str] = mapped_column(String(100), server_default=text("'Inter'"), default="Inter")
+    tv_layout: Mapped[str] = mapped_column(String(20), server_default=text("'classic'"), default="classic")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
+    owner: Mapped["ClubOwner | None"] = relationship(back_populates="clubs")
     sessions: Mapped[list["Session"]] = relationship(back_populates="club")
     players: Mapped[list["Player"]] = relationship(back_populates="club")
     chip_denominations: Mapped[list["ChipDenomination"]] = relationship(
@@ -113,6 +144,7 @@ class Session(Base):
     rake_rebuy: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
     status: Mapped[str] = mapped_column(String(20), default="open")
     table_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cash_king_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     buyin_kit: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     rebuy_kit: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -143,6 +175,10 @@ class SessionPlayer(Base):
     total_chips_in: Mapped[int] = mapped_column(Integer, default=0)
     total_physical_chips: Mapped[int] = mapped_column(Integer, default=0)
     total_chips_out: Mapped[int] = mapped_column(Integer, default=0)
+    croupier_hours: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    pix_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    payout_amount: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
+    payout_status: Mapped[str | None] = mapped_column(String(20), nullable=True)  # pending, paid
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
@@ -193,3 +229,43 @@ class PaymentPix(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     transaction: Mapped["Transaction"] = relationship(back_populates="payment_pix")
+
+
+class CashKingScore(Base):
+    __tablename__ = "cash_king_scores"
+    __table_args__ = (
+        Index(
+            "uq_cashking_session_player",
+            "session_player_id",
+            unique=True,
+            postgresql_where=text("session_player_id IS NOT NULL"),
+        ),
+        Index("ix_cashking_club_month", "club_id", "year_month"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=new_uuid)
+    club_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("clubs.id", ondelete="CASCADE"), nullable=False
+    )
+    player_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("players.id", ondelete="RESTRICT"), nullable=False
+    )
+    session_player_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("session_players.id", ondelete="CASCADE"), nullable=True
+    )
+    year_month: Mapped[str] = mapped_column(String(7), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+    attendance_pts: Mapped[float] = mapped_column(Numeric(8, 2), default=0)
+    hours_pts: Mapped[float] = mapped_column(Numeric(8, 2), default=0)
+    croupier_pts: Mapped[float] = mapped_column(Numeric(8, 2), default=0)
+    profit_pts: Mapped[float] = mapped_column(Numeric(8, 2), default=0)
+    manual_adj: Mapped[float] = mapped_column(Numeric(8, 2), default=0)
+    total_pts: Mapped[float] = mapped_column(Numeric(8, 2), default=0)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    club: Mapped["Club"] = relationship()
+    player: Mapped["Player"] = relationship()
+    session_player: Mapped["SessionPlayer | None"] = relationship()

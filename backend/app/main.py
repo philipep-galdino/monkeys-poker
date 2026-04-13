@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.database import async_session
-from app.routers import admin, chips, clubs, players, sessions, webhooks
+from app.routers import admin, cash_king, chips, clubs, owners, players, sessions, webhooks
 from app.schemas import HealthResponse
 from app.services.websocket_manager import manager
 
@@ -51,6 +51,8 @@ app.include_router(sessions.router, prefix="/api")
 app.include_router(players.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(webhooks.router, prefix="/api")
+app.include_router(cash_king.router, prefix="/api")
+app.include_router(owners.router, prefix="/api")
 
 
 @app.get("/api/health", response_model=HealthResponse)

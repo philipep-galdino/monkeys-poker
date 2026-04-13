@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -23,6 +23,60 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+# ── Owner ────────────────────────────────────────────────────────────────────
+
+class OwnerCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=200)
+    email: str = Field(min_length=5, max_length=200)
+    phone: str
+    password: str = Field(min_length=6, max_length=100)
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        digits = normalize_phone(v)
+        if len(digits) not in (10, 11):
+            raise ValueError("Telefone deve ter 10 ou 11 dígitos (com DDD)")
+        return digits
+
+
+class OwnerResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    email: str
+    phone: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class OwnerRegister(BaseModel):
+    name: str = Field(min_length=2, max_length=200)
+    email: str = Field(min_length=5, max_length=200)
+    phone: str
+    password: str = Field(min_length=6, max_length=100)
+    club_name: str = Field(min_length=1, max_length=200)
+    club_slug: str = Field(min_length=1, max_length=100, pattern=r"^[a-z0-9\-]+$")
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        digits = normalize_phone(v)
+        if len(digits) not in (10, 11):
+            raise ValueError("Telefone deve ter 10 ou 11 dígitos (com DDD)")
+        return digits
+
+
+class OwnerLogin(BaseModel):
+    email: str
+    password: str
+
+
+class OwnerPasswordChange(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=6, max_length=100)
+
+
 # ── Club ─────────────────────────────────────────────────────────────────────
 
 class ClubCreate(BaseModel):
@@ -32,6 +86,7 @@ class ClubCreate(BaseModel):
     default_rake_buyin: float = Field(ge=0, default=0)
     default_rake_rebuy: float = Field(ge=0, default=0)
     allow_multiple_buyins: bool = False
+    owner: OwnerCreate | None = None
 
 
 class ClubUpdate(BaseModel):
@@ -40,6 +95,32 @@ class ClubUpdate(BaseModel):
     default_rake_buyin: float | None = Field(None, ge=0)
     default_rake_rebuy: float | None = Field(None, ge=0)
     allow_multiple_buyins: bool | None = None
+    payment_mode: str | None = None
+    pix_key: str | None = None
+    mp_access_token: str | None = None
+    mp_webhook_secret: str | None = None
+    # Theme
+    logo_url: str | None = None
+    primary_color: str | None = None
+    accent_color: str | None = None
+    bg_color: str | None = None
+    text_color: str | None = None
+    bg_image_url: str | None = None
+    font_family: str | None = None
+    tv_layout: str | None = None
+
+
+class ClubThemeResponse(BaseModel):
+    logo_url: str | None = None
+    primary_color: str = "#d4a937"
+    accent_color: str = "#1a5c38"
+    bg_color: str = "#0f1419"
+    text_color: str = "#e5e7eb"
+    bg_image_url: str | None = None
+    font_family: str = "Inter"
+    tv_layout: str = "classic"
+
+    model_config = {"from_attributes": True}
 
 
 class ClubResponse(BaseModel):
@@ -50,7 +131,49 @@ class ClubResponse(BaseModel):
     default_rake_buyin: float
     default_rake_rebuy: float
     allow_multiple_buyins: bool
+    payment_mode: str = "static_pix"
+    pix_key: str | None = None
+    has_mp_credentials: bool = False
+    owner: OwnerResponse | None = None
+    # Theme
+    logo_url: str | None = None
+    primary_color: str = "#d4a937"
+    accent_color: str = "#1a5c38"
+    bg_color: str = "#0f1419"
+    text_color: str = "#e5e7eb"
+    bg_image_url: str | None = None
+    font_family: str = "Inter"
+    tv_layout: str = "classic"
     created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def _compute_has_mp(cls, data, handler):  # type: ignore[override]
+        # Extract mp_access_token before Pydantic strips it (not in schema fields)
+        if hasattr(data, "mp_access_token"):
+            token = data.mp_access_token  # ORM object
+        elif isinstance(data, dict):
+            token = data.get("mp_access_token")
+        else:
+            token = None
+        obj = handler(data)
+        obj.has_mp_credentials = bool(token)
+        return obj
+
+
+class ClubPublicResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    slug: str
+    logo_url: str | None = None
+    primary_color: str = "#d4a937"
+    accent_color: str = "#1a5c38"
+    bg_color: str = "#0f1419"
+    text_color: str = "#e5e7eb"
+    font_family: str = "Inter"
+    active_session_id: uuid.UUID | None = None
 
     model_config = {"from_attributes": True}
 
@@ -102,6 +225,7 @@ class SessionCreate(BaseModel):
     rake_buyin: float | None = Field(None, ge=0)
     rake_rebuy: float | None = Field(None, ge=0)
     table_limit: int | None = Field(None, ge=1)
+    cash_king_enabled: bool = False
 
 
 class PlayerBrief(BaseModel):
@@ -134,6 +258,9 @@ class SessionPlayerResponse(BaseModel):
     total_chips_in: int
     total_physical_chips: int = 0
     total_chips_out: int
+    pix_key: str | None = None
+    payout_amount: float | None = None
+    payout_status: str | None = None
     joined_at: datetime
     transactions: list[TransactionResponse] = []
 
@@ -152,6 +279,7 @@ class SessionResponse(BaseModel):
     rake_rebuy: float = 0
     status: str
     table_limit: int | None = None
+    cash_king_enabled: bool = False
     buyin_kit: dict | None = None
     rebuy_kit: dict | None = None
     created_at: datetime
@@ -199,6 +327,7 @@ class PlayerSessionResponse(BaseModel):
     id: uuid.UUID
     session_id: uuid.UUID
     session_name: str
+    player_id: uuid.UUID
     player_name: str
     status: str
     total_chips_in: int
@@ -206,6 +335,7 @@ class PlayerSessionResponse(BaseModel):
     total_chips_out: int
     blind_value: float = 0
     blinds_count: float = 0
+    cash_king_enabled: bool = False
     transactions: list[TransactionResponse] = []
 
     model_config = {"from_attributes": True}
@@ -215,10 +345,14 @@ class PlayerSessionResponse(BaseModel):
 
 class BuyinResponse(BaseModel):
     transaction_id: uuid.UUID
-    qr_code_base64: str
-    qr_code: str
+    payment_mode: str = "mercado_pago"
     amount: float
-    expires_at: datetime
+    # Mercado Pago fields (only when payment_mode == "mercado_pago")
+    qr_code_base64: str | None = None
+    qr_code: str | None = None
+    expires_at: datetime | None = None
+    # Static Pix fields (only when payment_mode == "static_pix")
+    pix_key: str | None = None
 
 
 # ── Cash Payment ─────────────────────────────────────────────────────────────
@@ -234,13 +368,20 @@ class CashPaymentResponse(BaseModel):
 
 class CashoutRequest(BaseModel):
     chips_returned: int = Field(ge=0)
+    pix_key: str | None = None
+    croupier_hours: float | None = Field(None, ge=0)
 
 
 class CashoutResponse(BaseModel):
     session_player_id: uuid.UUID
     total_chips_in: int
     total_chips_out: int
+    net_result: int
+    payout_amount: float | None
+    pix_key: str | None
+    payout_status: str | None
     status: str
+    cash_king_pts: float | None = None
 
 
 # ── Session Close / Reconciliation ───────────────────────────────────────────
@@ -300,6 +441,52 @@ class PlayerHistoryResponse(BaseModel):
     items: list[PlayerHistoryItem]
     total_sessions: int
     total_net: float
+
+
+# ── Cash King ────────────────────────────────────────────────────────────────
+
+class CashKingScoreResponse(BaseModel):
+    id: uuid.UUID
+    player: PlayerBrief
+    session_name: str | None = None
+    session_date: datetime | None = None
+    description: str | None = None
+    attendance_pts: float
+    hours_pts: float
+    croupier_pts: float
+    profit_pts: float
+    manual_adj: float
+    total_pts: float
+
+
+class CashKingLeaderboardEntry(BaseModel):
+    player: PlayerBrief
+    total_pts: float
+    session_count: int
+
+
+class CashKingLeaderboardResponse(BaseModel):
+    year_month: str
+    entries: list[CashKingLeaderboardEntry]
+
+
+class CashKingEditRequest(BaseModel):
+    attendance_pts: float | None = None
+    hours_pts: float | None = None
+    croupier_pts: float | None = None
+    profit_pts: float | None = None
+    manual_adj: float | None = None
+
+
+class CashKingManualCreate(BaseModel):
+    player_id: uuid.UUID
+    year_month: str | None = None
+    description: str | None = Field(None, max_length=200)
+    attendance_pts: float = 0
+    hours_pts: float = 0
+    croupier_pts: float = 0
+    profit_pts: float = 0
+    manual_adj: float = 0
 
 
 # ── Health ───────────────────────────────────────────────────────────────────
