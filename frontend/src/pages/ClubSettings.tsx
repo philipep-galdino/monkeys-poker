@@ -194,16 +194,16 @@ export default function ClubSettings() {
   }
 
   return (
-    <div className="themed-shell p-6">
+    <div className="themed-shell px-3 py-4 sm:p-6">
       <div className="max-w-3xl mx-auto">
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex items-center gap-3 mb-6">
           <button
             onClick={() => navigate(basePath)}
             className="themed-muted hover:opacity-100 text-sm"
           >
             &larr; Painel
           </button>
-          <h1 className="text-2xl font-bold themed-heading">{pt.admin.clubs.settingsTitle}</h1>
+          <h1 className="text-xl sm:text-2xl font-bold themed-heading">{pt.admin.clubs.settingsTitle}</h1>
         </div>
 
         {error && (
@@ -219,7 +219,7 @@ export default function ClubSettings() {
 
         <form onSubmit={handleSave} className="space-y-6">
           {/* Club Info */}
-          <div className="themed-card p-6">
+          <div className="themed-card p-4 sm:p-6">
             <h2 className="text-lg font-semibold mb-4 themed-heading">Informações do Clube</h2>
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
@@ -258,12 +258,12 @@ export default function ClubSettings() {
           </div>
 
           {/* Rake Defaults */}
-          <div className="themed-card p-6">
+          <div className="themed-card p-4 sm:p-6">
             <h2 className="text-lg font-semibold mb-2 themed-heading">{pt.admin.settings.rakeDefaults}</h2>
             <p className="text-sm themed-muted mb-4">
               Esses padrões são copiados para novas sessões. Você pode alterá-los por sessão no momento da criação.
             </p>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block themed-label mb-1">
                   {pt.admin.settings.rakeBuyin}
@@ -294,7 +294,7 @@ export default function ClubSettings() {
           </div>
 
           {/* Payment Configuration */}
-          <div className="themed-card p-6">
+          <div className="themed-card p-4 sm:p-6">
             <h2 className="text-lg font-semibold mb-2 themed-heading">{pt.admin.settings.paymentConfig}</h2>
             <p className="text-sm themed-muted mb-4">
               Escolha como os jogadores pagam buy-ins e rebuys.
@@ -403,7 +403,7 @@ export default function ClubSettings() {
           </div>
 
           {/* Theme Builder */}
-          <div className="themed-card p-6">
+          <div className="themed-card p-4 sm:p-6">
             <h2 className="text-lg font-semibold mb-4 themed-heading">{pt.admin.theme.title}</h2>
 
             <div className="space-y-4">
@@ -441,14 +441,14 @@ export default function ClubSettings() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <ColorField label={pt.admin.theme.primaryColor} value={primaryColor} onChange={setPrimaryColor} />
                 <ColorField label={pt.admin.theme.accentColor} value={accentColor} onChange={setAccentColor} />
                 <ColorField label={pt.admin.theme.bgColor} value={bgColor} onChange={setBgColor} />
                 <ColorField label={pt.admin.theme.textColor} value={textColor} onChange={setTextColor} />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block themed-label mb-1">
                     {pt.admin.theme.fontFamily}
@@ -511,7 +511,7 @@ export default function ClubSettings() {
           </div>
 
           {/* Chip Denominations */}
-          <div className="themed-card p-6">
+          <div className="themed-card p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold themed-heading">{pt.admin.settings.chipInventory}</h2>
               <button
@@ -522,7 +522,8 @@ export default function ClubSettings() {
                 + {pt.admin.settings.addChip}
               </button>
             </div>
-            <div className="space-y-3">
+            {/* Desktop grid */}
+            <div className="hidden sm:block space-y-3">
               <div className="grid grid-cols-12 gap-2 text-[10px] uppercase font-bold themed-muted">
                 <span className="col-span-2">{pt.admin.settings.chipLabel}</span>
                 <span className="col-span-2">{pt.admin.settings.chipValue}</span>
@@ -533,53 +534,48 @@ export default function ClubSettings() {
               </div>
               {chips.map((chip, i) => (
                 <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                  <input
-                    type="text"
-                    value={chip.label}
-                    onChange={(e) => updateChip(i, "label", e.target.value)}
-                    placeholder="R$5"
-                    className="col-span-2 themed-input text-sm px-2 py-1.5"
-                  />
-                  <input
-                    type="number"
-                    value={chip.value}
-                    onChange={(e) => updateChip(i, "value", e.target.value)}
-                    placeholder="5"
-                    className="col-span-2 themed-input text-sm px-2 py-1.5"
-                    min="0.01"
-                    step="0.01"
-                  />
-                  <input
-                    type="number"
-                    value={chip.quantity}
-                    onChange={(e) => updateChip(i, "quantity", e.target.value)}
-                    placeholder="100"
-                    className="col-span-2 themed-input text-sm px-2 py-1.5"
-                    min="0"
-                  />
-                  <input
-                    type="text"
-                    value={chip.color}
-                    onChange={(e) => updateChip(i, "color", e.target.value)}
-                    placeholder="red"
-                    className="col-span-2 themed-input text-sm px-2 py-1.5"
-                  />
+                  <input type="text" value={chip.label} onChange={(e) => updateChip(i, "label", e.target.value)} placeholder="R$5" className="col-span-2 themed-input text-sm px-2 py-1.5" />
+                  <input type="number" value={chip.value} onChange={(e) => updateChip(i, "value", e.target.value)} placeholder="5" className="col-span-2 themed-input text-sm px-2 py-1.5" min="0.01" step="0.01" />
+                  <input type="number" value={chip.quantity} onChange={(e) => updateChip(i, "quantity", e.target.value)} placeholder="100" className="col-span-2 themed-input text-sm px-2 py-1.5" min="0" />
+                  <input type="text" value={chip.color} onChange={(e) => updateChip(i, "color", e.target.value)} placeholder="red" className="col-span-2 themed-input text-sm px-2 py-1.5" />
                   <div className="col-span-2 flex items-center justify-center">
-                    <input
-                      type="checkbox"
-                      checked={chip.active}
-                      onChange={(e) => updateChip(i, "active", e.target.checked)}
-                      className="w-4 h-4 rounded accent-[var(--club-primary)]"
-                    />
+                    <input type="checkbox" checked={chip.active} onChange={(e) => updateChip(i, "active", e.target.checked)} className="w-4 h-4 rounded accent-[var(--club-primary)]" />
                   </div>
                   <div className="col-span-2 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => removeChipRow(i)}
-                      className="text-red-400 hover:text-red-600 text-xs font-medium"
-                    >
-                      Remover
-                    </button>
+                    <button type="button" onClick={() => removeChipRow(i)} className="text-red-400 hover:text-red-600 text-xs font-medium">Remover</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Mobile cards */}
+            <div className="sm:hidden space-y-3">
+              {chips.map((chip, i) => (
+                <div key={i} className="rounded-lg p-3" style={{ backgroundColor: "color-mix(in srgb, var(--club-bg) 80%, white)", border: "1px solid color-mix(in srgb, var(--club-text) 10%, transparent)" }}>
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <div>
+                      <label className="block text-[10px] uppercase themed-muted mb-0.5">{pt.admin.settings.chipLabel}</label>
+                      <input type="text" value={chip.label} onChange={(e) => updateChip(i, "label", e.target.value)} placeholder="R$5" className="themed-input text-sm px-2 py-1.5" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase themed-muted mb-0.5">{pt.admin.settings.chipValue}</label>
+                      <input type="number" value={chip.value} onChange={(e) => updateChip(i, "value", e.target.value)} placeholder="5" className="themed-input text-sm px-2 py-1.5" min="0.01" step="0.01" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase themed-muted mb-0.5">{pt.admin.settings.chipQty}</label>
+                      <input type="number" value={chip.quantity} onChange={(e) => updateChip(i, "quantity", e.target.value)} placeholder="100" className="themed-input text-sm px-2 py-1.5" min="0" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase themed-muted mb-0.5">Cor</label>
+                      <input type="text" value={chip.color} onChange={(e) => updateChip(i, "color", e.target.value)} placeholder="red" className="themed-input text-sm px-2 py-1.5" />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 text-xs themed-muted">
+                      <input type="checkbox" checked={chip.active} onChange={(e) => updateChip(i, "active", e.target.checked)} className="w-4 h-4 rounded accent-[var(--club-primary)]" />
+                      {pt.admin.settings.chipActive}
+                    </label>
+                    <button type="button" onClick={() => removeChipRow(i)} className="text-red-400 hover:text-red-600 text-xs font-medium">Remover</button>
                   </div>
                 </div>
               ))}
