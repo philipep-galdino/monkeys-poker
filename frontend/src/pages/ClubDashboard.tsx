@@ -103,6 +103,7 @@ export default function ClubDashboard() {
     items: { label: string; color: string | null; count: number }[];
     isFallback?: boolean;
   } | null>(null);
+  const [breakdownNoInventory, setBreakdownNoInventory] = useState(false);
 
   const loadSession = useCallback(async () => {
     if (!clubId) return;
@@ -230,6 +231,7 @@ export default function ClubDashboard() {
     setShowBreakdown(true);
     setLoadingBreakdown(true);
     setBreakdownData(null);
+    setBreakdownNoInventory(false);
 
     try {
       const data = await api.getChipBreakdown(clubId, sp.total_chips_in, token);
@@ -240,7 +242,9 @@ export default function ClubDashboard() {
         items: data.items,
       });
     } catch (err) {
-      console.error(err);
+      if (err instanceof ApiError && err.status === 400) {
+        setBreakdownNoInventory(true);
+      }
     } finally {
       setLoadingBreakdown(false);
     }
@@ -352,37 +356,59 @@ export default function ClubDashboard() {
     await handleCloseSession(false);
   };
 
+  const isOwner = mode === "owner";
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <p className="text-gray-500">{pt.loading}</p>
+      <div className="min-h-screen flex items-center justify-center" style={isOwner ? { backgroundColor: theme.bg_color, color: theme.text_color } : { backgroundColor: "#f3f4f6" }}>
+        <p style={isOwner ? { color: `${theme.text_color}99` } : { color: "#6b7280" }}>{pt.loading}</p>
       </div>
     );
   }
 
-  const isOwner = mode === "owner";
-  const cardClass = isOwner ? "rounded-xl p-6 mb-6" : "bg-white rounded-xl shadow-md p-6 mb-6";
-  const cardStyle = isOwner ? { backgroundColor: `${theme.text_color}08`, border: `1px solid ${theme.text_color}15` } : undefined;
-  const labelClass = isOwner ? "text-sm font-medium mb-1" : "text-sm font-medium text-gray-700 mb-1";
-  const labelStyle = isOwner ? { color: `${theme.text_color}bb` } : undefined;
-  const inputClass = isOwner
-    ? "w-full px-3 py-2 rounded-lg outline-none"
-    : "w-full px-3 py-2 border rounded-lg";
-  const inputStyle = isOwner
-    ? { backgroundColor: `${theme.text_color}10`, border: `1px solid ${theme.text_color}20`, color: theme.text_color }
-    : undefined;
-  const btnPrimaryClass = isOwner
-    ? "font-semibold py-2 rounded-lg transition-opacity"
-    : "bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700";
-  const btnPrimaryStyle = isOwner
-    ? { backgroundColor: theme.accent_color, color: theme.text_color }
-    : undefined;
+  // ── Theme-aware style helpers (DRY) ──────────────────────────
+  // Owner mode: derive from club theme. Admin mode: static neutral palette.
+  const t = {
+    shell: isOwner
+      ? { backgroundColor: theme.bg_color, color: theme.text_color, fontFamily: theme.font_family } as const
+      : { backgroundColor: "#f3f4f6" } as const,
+    card: isOwner
+      ? { backgroundColor: `color-mix(in srgb, ${theme.bg_color} 88%, white)`, border: `1px solid ${theme.text_color}15` }
+      : { backgroundColor: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" },
+    modalBg: isOwner
+      ? { backgroundColor: `color-mix(in srgb, ${theme.bg_color} 95%, white)`, border: `1px solid ${theme.text_color}15`, color: theme.text_color }
+      : { backgroundColor: "#fff" },
+    input: isOwner
+      ? { backgroundColor: `${theme.text_color}10`, border: `1px solid ${theme.text_color}20`, color: theme.text_color }
+      : undefined,
+    stat: isOwner
+      ? { backgroundColor: `${theme.text_color}08`, color: theme.text_color }
+      : { backgroundColor: "#f9fafb" },
+    muted: isOwner ? { color: `${theme.text_color}99` } : { color: "#6b7280" },
+    heading: isOwner ? { color: theme.text_color } : { color: "#1f2937" },
+    primary: theme.primary_color,
+    accent: theme.accent_color,
+    text: isOwner ? theme.text_color : "#1f2937",
+    cancelBtn: isOwner
+      ? { backgroundColor: `${theme.text_color}12`, color: `${theme.text_color}cc` }
+      : { backgroundColor: "#f3f4f6" },
+    accentBtn: isOwner
+      ? { backgroundColor: theme.accent_color, color: theme.text_color }
+      : undefined,
+    link: isOwner ? { color: theme.primary_color } : { color: "#2563eb" },
+    linkHover: isOwner ? theme.primary_color : "#1d4ed8",
+    borderB: isOwner ? { borderColor: `${theme.text_color}15` } : undefined,
+    tableHead: isOwner
+      ? { backgroundColor: `${theme.text_color}08`, color: `${theme.text_color}99` }
+      : { backgroundColor: "#f9fafb", color: "#6b7280" },
+  };
+
+  const inputCls = "w-full px-3 py-2 rounded-lg outline-none";
+  const cardCls = "rounded-xl p-6 mb-6";
+  const cancelBtnCls = "flex-1 py-2 rounded-lg hover:opacity-90 text-sm transition-opacity";
 
   return (
-    <div
-      className="min-h-screen p-6"
-      style={isOwner ? { backgroundColor: theme.bg_color, color: theme.text_color, fontFamily: theme.font_family } : { backgroundColor: "#f3f4f6" }}
-    >
+    <div className="min-h-screen p-6" style={t.shell}>
       <div className="max-w-5xl mx-auto">
         {/* Top nav */}
         <div className="flex items-center justify-between mb-6">
@@ -444,29 +470,27 @@ export default function ClubDashboard() {
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-red-700 text-sm">
+          <div className={`rounded-lg p-3 mb-4 text-sm ${isOwner ? "bg-red-900/30 border border-red-500/30 text-red-300" : "bg-red-50 border border-red-200 text-red-700"}`}>
             {error}
           </div>
         )}
 
         {actionMsg && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-blue-700 text-sm">
+          <div className={`rounded-lg p-3 mb-4 text-sm ${isOwner ? "bg-blue-900/20 border border-blue-500/30 text-blue-300" : "bg-blue-50 border border-blue-200 text-blue-700"}`}>
             {actionMsg}
-            <button
-              onClick={() => setActionMsg("")}
-              className="ml-2 text-blue-500 hover:text-blue-700"
-            >
-              ×
-            </button>
+            <button onClick={() => setActionMsg("")} className="ml-2 opacity-70 hover:opacity-100">×</button>
           </div>
         )}
 
         {/* Reconciliation result */}
         {reconciliation && (
           <div
-            className={`rounded-lg p-4 mb-4 border ${reconciliation.warning ? "bg-yellow-50 border-yellow-200" : "bg-green-50 border-green-200"}`}
+            className={`rounded-lg p-4 mb-4 border ${isOwner
+              ? reconciliation.warning ? "bg-yellow-900/20 border-yellow-500/30" : "bg-green-900/20 border-green-500/30"
+              : reconciliation.warning ? "bg-yellow-50 border-yellow-200" : "bg-green-50 border-green-200"
+            }`}
           >
-            <h3 className="font-bold mb-2">Sessão Encerrada — Resumo</h3>
+            <h3 className="font-bold mb-2" style={t.heading}>Sessão Encerrada — Resumo</h3>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <span>Fichas Vendidas:</span>
               <span className="font-medium">{reconciliation.total_chips_sold}</span>
@@ -505,7 +529,7 @@ export default function ClubDashboard() {
 
         {/* Create session form */}
         {showCreate && (
-          <div className={cardClass} style={cardStyle}>
+          <div className={cardCls} style={t.card}>
             <h2 className="text-lg font-semibold mb-4">{pt.admin.dashboard.createSessionTitle}</h2>
             <form onSubmit={handleCreateSession} className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
@@ -519,7 +543,7 @@ export default function ClubDashboard() {
                     setCreateForm({ ...createForm, name: e.target.value })
                   }
                   placeholder="Cash Game - 03/04"
-                  className="w-full px-3 py-2 border rounded-lg"
+                  className={inputCls} style={t.input}
                   required
                 />
               </div>
@@ -534,7 +558,7 @@ export default function ClubDashboard() {
                     setCreateForm({ ...createForm, blinds_info: e.target.value })
                   }
                   placeholder="2"
-                  className="w-full px-3 py-2 border rounded-lg"
+                  className={inputCls} style={t.input}
                   required
                   min="0.01"
                   step="any"
@@ -551,7 +575,7 @@ export default function ClubDashboard() {
                     setCreateForm({ ...createForm, buy_in_amount: e.target.value })
                   }
                   placeholder="100"
-                  className="w-full px-3 py-2 border rounded-lg"
+                  className={inputCls} style={t.input}
                   required
                   min="1"
                   step="0.01"
@@ -568,7 +592,7 @@ export default function ClubDashboard() {
                     setCreateForm({ ...createForm, rebuy_amount: e.target.value })
                   }
                   placeholder="100"
-                  className="w-full px-3 py-2 border rounded-lg"
+                  className={inputCls} style={t.input}
                   required
                   min="1"
                   step="0.01"
@@ -586,7 +610,7 @@ export default function ClubDashboard() {
                   }
                   className="w-4 h-4"
                 />
-                <label className="text-sm text-gray-700">{pt.admin.dashboard.allowRebuys}</label>
+                <label className="text-sm" style={t.muted}>{pt.admin.dashboard.allowRebuys}</label>
               </div>
               <div className="col-span-2">
                 <label className="block text-sm font-medium mb-1">
@@ -598,7 +622,7 @@ export default function ClubDashboard() {
                   onChange={(e) =>
                     setCreateForm({ ...createForm, table_limit: e.target.value })
                   }
-                  className="w-full px-3 py-2 border rounded-lg"
+                  className={inputCls} style={t.input}
                   required
                   min="1"
                 />
@@ -615,13 +639,13 @@ export default function ClubDashboard() {
                   }
                   className="w-4 h-4"
                 />
-                <label className="text-sm text-gray-700">{pt.cashKing.enableLabel}</label>
+                <label className="text-sm" style={t.muted}>{pt.cashKing.enableLabel}</label>
               </div>
               <div className="col-span-2">
                 <button
                   type="submit"
-                  className={`w-full ${btnPrimaryClass}`}
-                  style={btnPrimaryStyle}
+                  className="w-full font-semibold py-2 rounded-lg transition-opacity"
+                  style={t.accentBtn || { backgroundColor: "#2563eb", color: "#fff" }}
                 >
                   {pt.admin.dashboard.createSessionSubmit}
                 </button>
@@ -632,11 +656,11 @@ export default function ClubDashboard() {
 
         {/* Session dashboard */}
         {session && (
-          <div className={isOwner ? "rounded-xl p-6" : "bg-white rounded-xl shadow-md p-6"} style={cardStyle}>
+          <div className="rounded-xl p-6" style={t.card}>
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-xl font-semibold">{session.name}</h2>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm" style={t.muted}>
                   Blind {pt.currency(parseFloat(session.blinds_info) || 0)} &middot; Buy-in{" "}
                   {pt.currency(session.buy_in_amount)} &middot;{" "}
                   <span
@@ -657,7 +681,8 @@ export default function ClubDashboard() {
                       href={`/tv/${clubId}/${session.id}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="px-3 py-1 bg-gray-100 rounded text-sm hover:bg-gray-200"
+                      className="px-3 py-1 rounded text-sm font-medium transition-opacity hover:opacity-80"
+                      style={isOwner ? { backgroundColor: `${theme.primary_color}20`, color: theme.primary_color, border: `1px solid ${theme.primary_color}30` } : { backgroundColor: "#dbeafe", color: "#1d4ed8" }}
                     >
                       {pt.admin.dashboard.tvLobby}
                     </a>
@@ -672,7 +697,8 @@ export default function ClubDashboard() {
                 {session.status === "closed" && (
                   <button
                     onClick={() => setShowCreate(true)}
-                    className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm hover:bg-blue-200"
+                    className="px-3 py-1 rounded text-sm transition-opacity hover:opacity-80"
+                    style={t.accentBtn || { backgroundColor: "#dbeafe", color: "#1d4ed8" }}
                   >
                     {pt.admin.dashboard.newSession}
                   </button>
@@ -682,62 +708,52 @@ export default function ClubDashboard() {
 
             {/* Summary stats */}
             <div className="grid grid-cols-4 gap-4 mb-4">
-              <div className={`rounded-lg p-3 text-center ${session.table_limit && session.session_players.length >= session.table_limit ? "bg-amber-100 text-amber-900 border border-amber-200" : "bg-gray-50"}`}>
-                <p className="text-2xl font-bold">
-                  {session.session_players.length}{session.table_limit ? ` / ${session.table_limit}` : ""}
-                </p>
-                <p className="text-xs text-gray-500 uppercase font-medium">
-                  {session.table_limit && session.session_players.length >= session.table_limit ? "LOTADO" : pt.admin.dashboard.summary.players}
-                </p>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-3 text-center">
-                <p className="text-2xl font-bold">
-                  {pt.currency(
-                    session.session_players.reduce(
-                      (sum, sp) => sum + sp.total_chips_in,
-                      0,
+              {(() => {
+                const isFull = !!(session.table_limit && session.session_players.length >= session.table_limit);
+                const stats = [
+                  {
+                    value: `${session.session_players.length}${session.table_limit ? ` / ${session.table_limit}` : ""}`,
+                    label: isFull ? "LOTADO" : pt.admin.dashboard.summary.players,
+                    style: isFull ? { backgroundColor: isOwner ? "rgba(245,158,11,0.15)" : "#fef3c7", color: isOwner ? "#fbbf24" : "#92400e" } : t.stat,
+                  },
+                  {
+                    value: pt.currency(session.session_players.reduce((sum, sp) => sum + sp.total_chips_in, 0)),
+                    label: pt.admin.dashboard.summary.chipsIn,
+                    style: t.stat,
+                  },
+                  {
+                    value: pt.currency(
+                      session.session_players
+                        .flatMap((sp) => sp.transactions)
+                        .filter((tx) => tx.status === "confirmed" && tx.payment_method === "pix" && tx.type !== "cash_out")
+                        .reduce((sum, tx) => sum + tx.amount, 0),
                     ),
-                  )}
-                </p>
-                <p className="text-xs text-gray-500">{pt.admin.dashboard.summary.chipsIn}</p>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-3 text-center">
-                <p className="text-2xl font-bold">
-                  {pt.currency(
-                    session.session_players
-                      .flatMap((sp) => sp.transactions)
-                      .filter(
-                        (t) =>
-                          t.status === "confirmed" &&
-                          t.payment_method === "pix" &&
-                          t.type !== "cash_out",
-                      )
-                      .reduce((sum, t) => sum + t.amount, 0),
-                  )}
-                </p>
-                <p className="text-xs text-gray-500">Recebido (Pix)</p>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-3 text-center">
-                <p className="text-2xl font-bold">
-                  {pt.currency(
-                    session.session_players
-                      .flatMap((sp) => sp.transactions)
-                      .filter(
-                        (t) =>
-                          t.status === "confirmed" &&
-                          t.payment_method === "cash" &&
-                          t.type !== "cash_out",
-                      )
-                      .reduce((sum, t) => sum + t.amount, 0),
-                  )}
-                </p>
-                <p className="text-xs text-gray-500">Recebido (Dinheiro)</p>
-              </div>
+                    label: "Recebido (Pix)",
+                    style: t.stat,
+                  },
+                  {
+                    value: pt.currency(
+                      session.session_players
+                        .flatMap((sp) => sp.transactions)
+                        .filter((tx) => tx.status === "confirmed" && tx.payment_method === "cash" && tx.type !== "cash_out")
+                        .reduce((sum, tx) => sum + tx.amount, 0),
+                    ),
+                    label: "Recebido (Dinheiro)",
+                    style: t.stat,
+                  },
+                ];
+                return stats.map((s) => (
+                  <div key={s.label} className="rounded-lg p-3 text-center" style={s.style}>
+                    <p className="text-2xl font-bold" style={{ color: isOwner ? theme.primary_color : undefined }}>{s.value}</p>
+                    <p className="text-xs uppercase font-medium" style={t.muted}>{s.label}</p>
+                  </div>
+                ));
+              })()}
             </div>
 
             {/* Player list */}
             <div className="flex items-center justify-between mt-8 mb-4">
-              <h3 className="text-lg font-semibold text-gray-800">{pt.admin.dashboard.summary.players}</h3>
+              <h3 className="text-lg font-semibold" style={t.heading}>{pt.admin.dashboard.summary.players}</h3>
               {session.status === "open" && (
                 <button
                   onClick={() => setShowAddPlayer(true)}
@@ -749,7 +765,7 @@ export default function ClubDashboard() {
             </div>
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left text-gray-500">
+                <tr className="border-b text-left" style={{ ...t.borderB, ...t.muted }}>
                   <th className="py-2">{pt.admin.dashboard.playersTable.name}</th>
                   <th className="py-2">{pt.admin.dashboard.playersTable.phone}</th>
                   <th className="py-2">{pt.admin.dashboard.playersTable.status}</th>
@@ -766,20 +782,21 @@ export default function ClubDashboard() {
                     <td className="py-3 font-medium">
                       <button 
                         onClick={() => openHistory(sp.player.id)}
-                        className="text-blue-600 hover:text-blue-800 hover:underline text-left cursor-pointer"
+                        className="hover:underline text-left cursor-pointer"
+                        style={t.link}
                       >
                         {sp.player.name}
                       </button>
                     </td>
-                    <td className="py-3 text-gray-500">{sp.player.phone}</td>
+                    <td className="py-3" style={t.muted}>{sp.player.phone}</td>
                     <td className="py-3">
                       <span
                         className={`px-2 py-0.5 rounded text-xs font-medium ${
                           sp.status === "active"
-                            ? "bg-green-100 text-green-700"
+                            ? "bg-green-500/20 text-green-400"
                             : sp.status === "waiting_payment"
-                              ? "bg-yellow-100 text-yellow-700"
-                              : "bg-gray-100 text-gray-600"
+                              ? "bg-yellow-500/20 text-yellow-400"
+                              : isOwner ? "bg-white/10 opacity-60" : "bg-gray-100 text-gray-600"
                         }`}
                       >
                         {pt.status[sp.status as keyof typeof pt.status] || sp.status}
@@ -789,7 +806,8 @@ export default function ClubDashboard() {
                       {sp.total_chips_in > 0 ? (
                         <button
                           onClick={() => openBreakdown(sp)}
-                          className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                          className="hover:underline cursor-pointer"
+                          style={t.link}
                         >
                           {pt.currency(sp.total_chips_in)}
                         </button>
@@ -867,7 +885,7 @@ export default function ClubDashboard() {
             </table>
 
             {session.session_players.length === 0 && (
-              <p className="text-center text-gray-400 py-8">
+              <p className="text-center py-8" style={t.muted}>
                 {pt.admin.dashboard.playersTable.noPlayers}
               </p>
             )}
@@ -881,30 +899,32 @@ export default function ClubDashboard() {
               <h3 className="text-lg font-semibold mb-2">
                 {pt.admin.modals.cashoutTitle} — {cashoutTarget.player.name}
               </h3>
-              <p className="text-sm text-gray-500 mb-4">
+              <p className="text-sm mb-4" style={t.muted}>
                 Fichas em jogo: {pt.currency(cashoutTarget.total_chips_in)}
               </p>
 
-              <label className="block text-xs text-gray-500 mb-1 font-medium">Quanto o jogador está saindo? (R$)</label>
+              <label className="block text-xs mb-1 font-medium" style={t.muted}>Quanto o jogador está saindo? (R$)</label>
               <input
                 type="number"
                 value={cashoutChips}
                 onChange={(e) => setCashoutChips(e.target.value)}
                 placeholder="0"
-                className="w-full px-3 py-2 border rounded-lg mb-3"
+                className={`${inputCls} mb-3`}
+                style={t.input}
                 min="0"
                 autoFocus
               />
 
               {session?.cash_king_enabled && (
                 <>
-                  <label className="block text-xs text-gray-500 mb-1 font-medium">{pt.cashKing.croupierHoursLabel}</label>
+                  <label className="block text-xs mb-1 font-medium" style={t.muted}>{pt.cashKing.croupierHoursLabel}</label>
                   <input
                     type="number"
                     value={cashoutCroupierHours}
                     onChange={(e) => setCashoutCroupierHours(e.target.value)}
                     placeholder="0"
-                    className="w-full px-3 py-2 border rounded-lg mb-3"
+                    className={`${inputCls} mb-3`}
+                    style={t.input}
                     min="0"
                     step="0.5"
                   />
@@ -912,10 +932,10 @@ export default function ClubDashboard() {
               )}
 
               {cashoutChips && parseInt(cashoutChips) > 0 && (
-                <div className="bg-gray-50 rounded-lg p-3 mb-4 text-sm">
+                <div className="rounded-lg p-3 mb-4 text-sm" style={t.stat}>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Valor a pagar:</span>
-                    <span className="font-bold text-gray-800">{pt.currency(parseInt(cashoutChips))}</span>
+                    <span style={t.muted}>Valor a pagar:</span>
+                    <span className="font-bold" style={t.heading}>{pt.currency(parseInt(cashoutChips))}</span>
                   </div>
                 </div>
               )}
@@ -932,7 +952,7 @@ export default function ClubDashboard() {
                     setCashoutTarget(null);
                     setCashoutChips("");
                   }}
-                  className="flex-1 bg-gray-100 py-2 rounded-lg hover:bg-gray-200"
+                  className={cancelBtnCls} style={t.cancelBtn}
                 >
                   Cancelar
                 </button>
@@ -947,11 +967,11 @@ export default function ClubDashboard() {
             <div className={`${isOwner ? '' : 'bg-white'} rounded-xl p-6 max-w-sm w-full text-center`} style={isOwner ? { backgroundColor: `color-mix(in srgb, ${theme.bg_color} 95%, white)`, border: `1px solid ${theme.text_color}15`, color: theme.text_color } : undefined}>
               {cashoutResult.payout_amount && cashoutResult.payout_amount > 0 ? (
                 <>
-                  <p className="text-gray-800 font-semibold text-lg mb-1">
+                  <p className="font-semibold text-lg mb-1" style={t.heading}>
                     {cashoutResult.playerName}
                   </p>
-                  <p className="text-sm text-gray-500 mb-2">Valor a pagar</p>
-                  <p className="text-3xl font-bold text-gray-800 mb-2">
+                  <p className="text-sm mb-2" style={t.muted}>Valor a pagar</p>
+                  <p className="text-3xl font-bold mb-2" style={t.heading}>
                     {pt.currency(cashoutResult.payout_amount)}
                   </p>
                   {cashoutResult.cash_king_pts !== null && (
@@ -970,7 +990,7 @@ export default function ClubDashboard() {
                     </button>
                     <button
                       onClick={() => setCashoutResult(null)}
-                      className="flex-1 bg-gray-100 py-2 rounded-lg hover:bg-gray-200 text-sm"
+                      className={cancelBtnCls} style={t.cancelBtn}
                     >
                       Pagar depois
                     </button>
@@ -978,10 +998,10 @@ export default function ClubDashboard() {
                 </>
               ) : (
                 <>
-                  <p className="text-gray-800 font-semibold text-lg mb-1">
+                  <p className="font-semibold text-lg mb-1" style={t.heading}>
                     {cashoutResult.playerName}
                   </p>
-                  <p className="text-sm text-gray-500 mb-2">
+                  <p className="text-sm mb-2" style={t.muted}>
                     Saiu sem fichas
                   </p>
                   {cashoutResult.cash_king_pts !== null && (
@@ -992,7 +1012,7 @@ export default function ClubDashboard() {
                   )}
                   <button
                     onClick={() => setCashoutResult(null)}
-                    className="px-6 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm"
+                    className="px-6 py-2 rounded-lg text-sm transition-opacity hover:opacity-80" style={t.cancelBtn}
                   >
                     Fechar
                   </button>
@@ -1009,7 +1029,7 @@ export default function ClubDashboard() {
               <h3 className="text-lg font-semibold mb-4">{pt.admin.modals.addPlayerTitle}</h3>
               <form onSubmit={handleAddPlayer}>
                 {addPlayerError && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-2 mb-4 text-red-700 text-sm">
+                  <div className={`rounded-lg p-2 mb-4 text-sm ${isOwner ? "bg-red-900/30 border border-red-500/30 text-red-300" : "bg-red-50 border border-red-200 text-red-700"}`}>
                     {addPlayerError}
                   </div>
                 )}
@@ -1021,7 +1041,7 @@ export default function ClubDashboard() {
                     type="text"
                     value={addPlayerForm.name}
                     onChange={(e) => setAddPlayerForm({ ...addPlayerForm, name: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg"
+                    className={inputCls} style={t.input}
                     placeholder="Ex: João Silva"
                     required
                     autoFocus
@@ -1035,7 +1055,7 @@ export default function ClubDashboard() {
                     type="tel"
                     value={addPlayerForm.phone}
                     onChange={(e) => setAddPlayerForm({ ...addPlayerForm, phone: formatPhone(e.target.value) })}
-                    className="w-full px-3 py-2 border rounded-lg"
+                    className={inputCls} style={t.input}
                     placeholder="(11) 99999-9999"
                     required
                   />
@@ -1050,11 +1070,11 @@ export default function ClubDashboard() {
                       type="number"
                       value={addPlayerForm.cashBuyIns}
                       onChange={(e) => setAddPlayerForm({ ...addPlayerForm, cashBuyIns: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-lg"
+                      className={inputCls} style={t.input}
                       min="0"
                     />
                     {buyInsBreakdown && (
-                      <div className="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700">
+                      <div className="mt-2 p-3 rounded-lg text-sm" style={{ ...t.stat, border: `1px solid ${isOwner ? theme.text_color + '15' : '#e5e7eb'}` }}>
                         <div className="font-semibold mb-1">Total: R${buyInsBreakdown.total_value.toFixed(2)}</div>
                         <div className="text-xs">
                           {buyInsBreakdown.items.map(i => `${i.count}x ${i.label}`).join(" • ")}
@@ -1067,8 +1087,7 @@ export default function ClubDashboard() {
                 <div className="flex gap-2">
                   <button
                     type="submit"
-                    className={`flex-1 py-2 rounded-lg ${isOwner ? '' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
-                    style={isOwner ? { backgroundColor: theme.accent_color, color: theme.text_color } : undefined}
+                    className="flex-1 py-2 rounded-lg font-semibold bg-green-600 text-white hover:bg-green-500 transition-colors"
                   >
                     Adicionar
                   </button>
@@ -1079,7 +1098,7 @@ export default function ClubDashboard() {
                       setAddPlayerForm({ name: "", phone: "", cashBuyIns: "0" });
                       setAddPlayerError("");
                     }}
-                    className="flex-1 bg-gray-100 py-2 rounded-lg hover:bg-gray-200"
+                    className={cancelBtnCls} style={t.cancelBtn}
                   >
                     Cancelar
                   </button>
@@ -1097,18 +1116,18 @@ export default function ClubDashboard() {
 
               {uncashedPlayers.length > 0 ? (
                 <>
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
-                    <p className="text-sm text-yellow-800 font-medium mb-2">
+                  <div className={`rounded-lg p-3 mb-4 ${isOwner ? "bg-yellow-900/20 border border-yellow-500/30" : "bg-yellow-50 border border-yellow-200"}`}>
+                    <p className={`text-sm font-medium mb-2 ${isOwner ? "text-yellow-300" : "text-yellow-800"}`}>
                       {pt.admin.modals.closeSessionWarning}
                     </p>
-                    <ul className="text-sm text-yellow-700 space-y-1">
+                    <ul className={`text-sm space-y-1 ${isOwner ? "text-yellow-300/80" : "text-yellow-700"}`}>
                       {uncashedPlayers.map((p) => (
                         <li key={p.id}>
                           {p.name} — {pt.currency(p.total_chips_in)} em fichas
                         </li>
                       ))}
                     </ul>
-                    <p className="text-sm text-yellow-800 mt-2">
+                    <p className={`text-sm mt-2 ${isOwner ? "text-yellow-300" : "text-yellow-800"}`}>
                       Se prosseguir, eles serão encerrados automaticamente com <strong>0 fichas devolvidas</strong>.
                     </p>
                   </div>
@@ -1124,7 +1143,7 @@ export default function ClubDashboard() {
                         setShowCloseConfirm(false);
                         setUncashedPlayers([]);
                       }}
-                      className="flex-1 bg-gray-100 py-2 rounded-lg hover:bg-gray-200"
+                      className={cancelBtnCls} style={t.cancelBtn}
                     >
                       Cancelar
                     </button>
@@ -1132,7 +1151,7 @@ export default function ClubDashboard() {
                 </>
               ) : (
                 <>
-                  <p className="text-sm text-gray-500 mb-4">
+                  <p className="text-sm mb-4" style={t.muted}>
                     Isso cancelará todos os pagamentos pendentes e encerrará a sessão.
                     Esta ação não pode ser desfeita.
                   </p>
@@ -1145,7 +1164,7 @@ export default function ClubDashboard() {
                     </button>
                     <button
                       onClick={() => setShowCloseConfirm(false)}
-                      className="flex-1 bg-gray-100 py-2 rounded-lg hover:bg-gray-200"
+                      className={cancelBtnCls} style={t.cancelBtn}
                     >
                       Cancelar
                     </button>
@@ -1160,49 +1179,43 @@ export default function ClubDashboard() {
         {historyTargetId && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className={`${isOwner ? '' : 'bg-white'} rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto`} style={isOwner ? { backgroundColor: `color-mix(in srgb, ${theme.bg_color} 95%, white)`, border: `1px solid ${theme.text_color}15`, color: theme.text_color } : undefined}>
-              <div className="flex justify-between items-center border-b pb-4 mb-4">
-                <h3 className="text-xl font-bold">{pt.admin.playerHistory.title}</h3>
+              <div className="flex justify-between items-center border-b pb-4 mb-4" style={t.borderB}>
+                <h3 className="text-xl font-bold" style={t.heading}>{pt.admin.playerHistory.title}</h3>
                 <button
                   onClick={() => setHistoryTargetId(null)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="opacity-60 hover:opacity-100 transition-opacity"
+                  style={t.muted}
                 >
                   Fechar
                 </button>
               </div>
 
               {loadingHistory ? (
-                <div className="text-center py-8 text-gray-500">{pt.loading}</div>
+                <div className="text-center py-8" style={t.muted}>{pt.loading}</div>
               ) : playerHistory ? (
                 <>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                    <div className="bg-gray-50 p-3 rounded text-center">
-                      <div className="text-xs text-gray-500 uppercase">{pt.admin.playerHistory.aggregate.totalSessions}</div>
-                      <div className="text-lg font-bold">{playerHistory.total_sessions}</div>
-                    </div>
-                    <div className="bg-blue-50 p-3 rounded text-center">
-                      <div className="text-xs text-blue-500 uppercase">{pt.admin.playerHistory.aggregate.totalBuyin}</div>
-                      <div className="text-lg font-bold text-blue-700">R${playerHistory.items.reduce((acc, cur) => acc + cur.total_buyin, 0).toFixed(2)}</div>
-                    </div>
-                    <div className="bg-orange-50 p-3 rounded text-center">
-                      <div className="text-xs text-orange-500 uppercase">{pt.admin.playerHistory.aggregate.totalCashout}</div>
-                      <div className="text-lg font-bold text-orange-700">{playerHistory.items.reduce((acc, cur) => acc + cur.total_cashout, 0)} fichas</div>
-                    </div>
-                    <div className={`p-3 rounded text-center ${playerHistory.total_net >= 0 ? "bg-green-50" : "bg-red-50"}`}>
-                      <div className={`text-xs uppercase ${playerHistory.total_net >= 0 ? "text-green-500" : "text-red-500"}`}>{pt.admin.playerHistory.aggregate.netResult}</div>
-                      <div className={`text-lg font-bold ${playerHistory.total_net >= 0 ? "text-green-700" : "text-red-700"}`}>
-                        R${playerHistory.total_net.toFixed(2)}
+                    {[
+                      { label: pt.admin.playerHistory.aggregate.totalSessions, value: String(playerHistory.total_sessions), color: isOwner ? theme.primary_color : undefined },
+                      { label: pt.admin.playerHistory.aggregate.totalBuyin, value: `R$${playerHistory.items.reduce((acc, cur) => acc + cur.total_buyin, 0).toFixed(2)}`, color: isOwner ? theme.primary_color : "#2563eb" },
+                      { label: pt.admin.playerHistory.aggregate.totalCashout, value: `${playerHistory.items.reduce((acc, cur) => acc + cur.total_cashout, 0)} fichas`, color: "#f97316" },
+                      { label: pt.admin.playerHistory.aggregate.netResult, value: `R$${playerHistory.total_net.toFixed(2)}`, color: playerHistory.total_net >= 0 ? "#22c55e" : "#ef4444" },
+                    ].map((s) => (
+                      <div key={s.label} className="p-3 rounded text-center" style={t.stat}>
+                        <div className="text-xs uppercase" style={t.muted}>{s.label}</div>
+                        <div className="text-lg font-bold" style={s.color ? { color: s.color } : t.heading}>{s.value}</div>
                       </div>
-                    </div>
+                    ))}
                   </div>
 
-                  <h4 className="font-semibold mb-3">Detalhes das Sessões</h4>
+                  <h4 className="font-semibold mb-3" style={t.heading}>Detalhes das Sessões</h4>
                   {playerHistory.items.length === 0 ? (
-                    <p className="text-gray-500 italic">Nenhuma sessão anterior encontrada.</p>
+                    <p className="italic" style={t.muted}>Nenhuma sessão anterior encontrada.</p>
                   ) : (
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto rounded-lg" style={isOwner ? { backgroundColor: `${theme.text_color}06` } : { backgroundColor: "#f9fafb" }}>
                       <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-50 border-b">
-                          <tr>
+                        <thead>
+                          <tr className="border-b" style={{ ...t.tableHead, ...t.borderB }}>
                             <th className="px-4 py-2">{pt.admin.playerHistory.table.session}</th>
                             <th className="px-4 py-2">{pt.admin.playerHistory.table.date}</th>
                             <th className="px-4 py-2 text-right">{pt.admin.playerHistory.table.buyin}</th>
@@ -1212,12 +1225,12 @@ export default function ClubDashboard() {
                         </thead>
                         <tbody>
                           {playerHistory.items.map((item) => (
-                            <tr key={item.session_id} className="border-b">
+                            <tr key={item.session_id} className="border-b" style={{ ...t.borderB, color: isOwner ? theme.text_color : undefined }}>
                               <td className="px-4 py-2 font-medium">{item.session_name}</td>
-                              <td className="px-4 py-2 text-gray-500">{new Date(item.session_date).toLocaleDateString()}</td>
+                              <td className="px-4 py-2" style={t.muted}>{new Date(item.session_date).toLocaleDateString()}</td>
                               <td className="px-4 py-2 text-right">R${item.total_buyin.toFixed(2)}</td>
                               <td className="px-4 py-2 text-right">{item.total_cashout} fichas</td>
-                              <td className={`px-4 py-2 text-right font-medium ${item.net_result >= 0 ? "text-green-600" : "text-red-600"}`}>
+                              <td className={`px-4 py-2 text-right font-medium ${item.net_result >= 0 ? "text-green-400" : "text-red-400"}`}>
                                 R${item.net_result.toFixed(2)}
                               </td>
                             </tr>
@@ -1228,7 +1241,7 @@ export default function ClubDashboard() {
                   )}
                 </>
               ) : (
-                <div className="text-center py-8 text-red-500">Erro ao carregar histórico.</div>
+                <div className="text-center py-8 text-red-400">Erro ao carregar histórico.</div>
               )}
             </div>
           </div>
@@ -1238,11 +1251,12 @@ export default function ClubDashboard() {
         {showBreakdown && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className={`${isOwner ? '' : 'bg-white'} rounded-xl p-6 max-w-sm w-full`} style={isOwner ? { backgroundColor: `color-mix(in srgb, ${theme.bg_color} 95%, white)`, border: `1px solid ${theme.text_color}15`, color: theme.text_color } : undefined}>
-              <div className="flex justify-between items-center border-b pb-4 mb-4">
-                <h3 className="text-xl font-bold">Kit de Fichas</h3>
+              <div className="flex justify-between items-center border-b pb-4 mb-4" style={t.borderB}>
+                <h3 className="text-xl font-bold" style={t.heading}>Kit de Fichas</h3>
                 <button
                   onClick={() => setShowBreakdown(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="opacity-60 hover:opacity-100 transition-opacity"
+                  style={t.muted}
                 >
                   Fechar
                 </button>
@@ -1250,50 +1264,68 @@ export default function ClubDashboard() {
 
               {loadingBreakdown ? (
                 <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                  <p className="text-gray-500 text-sm">Calculando kit...</p>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto mb-2" style={{ borderColor: theme.primary_color }}></div>
+                  <p className="text-sm" style={t.muted}>Calculando kit...</p>
                 </div>
               ) : breakdownData ? (
                 <>
-                  <div className="text-center mb-4 text-gray-700">
-                    <div className="text-sm font-medium">{breakdownData.name}</div>
+                  <div className="text-center mb-4">
+                    <div className="text-sm font-medium" style={t.heading}>{breakdownData.name}</div>
                     <div className="flex flex-col mt-1">
-                      <span className="text-xs text-gray-500">Valor Total: <strong className="text-gray-800">R$ {breakdownData.totalValue}</strong></span>
-                      <span className="text-xs text-gray-500">Total de Fichas: <strong className="text-gray-800">{breakdownData.totalCount} unidades</strong></span>
+                      <span className="text-xs" style={t.muted}>Valor Total: <strong style={t.heading}>R$ {breakdownData.totalValue}</strong></span>
+                      <span className="text-xs" style={t.muted}>Total de Fichas: <strong style={t.heading}>{breakdownData.totalCount} unidades</strong></span>
                     </div>
                   </div>
 
                   {breakdownData.isFallback && (
-                    <div className="bg-amber-50 border border-amber-200 text-amber-800 text-[10px] p-2 rounded mb-3 leading-tight">
+                    <div className={`text-[10px] p-2 rounded mb-3 leading-tight ${isOwner ? "bg-amber-500/10 border border-amber-500/20 text-amber-300" : "bg-amber-50 border border-amber-200 text-amber-800"}`}>
                       <strong>Aviso:</strong> Kit gerado com base no inventário atual e blinds da sessão (30 BBs base).
                     </div>
                   )}
 
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="rounded-lg p-4" style={isOwner ? { backgroundColor: `${theme.text_color}08`, border: `1px solid ${theme.text_color}12` } : { backgroundColor: "#f9fafb", border: "1px solid #e5e7eb" }}>
                     <div className="space-y-2">
                       {breakdownData.items.map((item, i) => (
                         <div key={i} className="flex justify-between items-center text-sm">
                           <div className="flex items-center gap-2">
-                            <span 
-                              className="w-3 h-3 rounded-full border border-gray-300" 
-                              style={{ backgroundColor: item.color || "#e5e7eb" }} 
+                            <span
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: item.color || (isOwner ? `${theme.text_color}30` : "#e5e7eb"), border: `1px solid ${isOwner ? theme.text_color + '20' : '#d1d5db'}` }}
                             />
-                            <span className="font-medium">{item.label}</span>
+                            <span className="font-medium" style={t.heading}>{item.label}</span>
                           </div>
-                          <span className="text-gray-600 font-semibold">{item.count}x</span>
+                          <span className="font-semibold" style={t.muted}>{item.count}x</span>
                         </div>
                       ))}
                       {breakdownData.items.length === 0 && (
-                        <div className="text-center text-red-500 text-xs py-2">
+                        <div className="text-center text-red-400 text-xs py-2">
                           Não foi possível calcular a distribuição (fichas insuficientes).
                         </div>
                       )}
                     </div>
                   </div>
                 </>
+              ) : breakdownNoInventory ? (
+                <div className="text-center py-8">
+                  <p className="text-3xl mb-3">🎰</p>
+                  <p className="font-semibold mb-1" style={t.heading}>Inventário de fichas não configurado</p>
+                  <p className="text-sm mb-4" style={t.muted}>
+                    Configure o inventário de fichas do clube para que possamos calcular o kit ideal para cada jogador.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setShowBreakdown(false);
+                      navigate(`${basePath}/settings`);
+                    }}
+                    className="px-4 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80"
+                    style={{ backgroundColor: theme.primary_color, color: isOwner ? theme.bg_color : "#fff" }}
+                  >
+                    Configurar Fichas
+                  </button>
+                </div>
               ) : (
-                <div className="text-center py-8 text-red-500 text-sm">
-                  Erro ao carregar distribuição de fichas.
+                <div className="text-center py-8">
+                  <p className="text-red-400 text-sm">Erro ao carregar distribuição de fichas.</p>
                 </div>
               )}
             </div>
@@ -1305,18 +1337,18 @@ export default function ClubDashboard() {
             <div className={`${isOwner ? '' : 'bg-white'} rounded-xl p-6 max-w-sm w-full text-center`} style={isOwner ? { backgroundColor: `color-mix(in srgb, ${theme.bg_color} 95%, white)`, border: `1px solid ${theme.text_color}15`, color: theme.text_color } : undefined}>
               {verifyModal.loading ? (
                 <>
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-gray-600 font-medium">Verificando pagamento...</p>
-                  <p className="text-sm text-gray-400 mt-1">{verifyModal.playerName}</p>
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 mx-auto mb-4" style={{ borderColor: isOwner ? theme.primary_color : "#2563eb" }}></div>
+                  <p className="font-medium" style={t.heading}>Verificando pagamento...</p>
+                  <p className="text-sm mt-1" style={t.muted}>{verifyModal.playerName}</p>
                 </>
               ) : verifyModal.error ? (
                 <>
                   <div className="text-red-500 text-4xl mb-3">✕</div>
-                  <p className="text-gray-800 font-semibold mb-1">Erro na verificação</p>
-                  <p className="text-sm text-red-600 mb-4">{verifyModal.error}</p>
+                  <p className="font-semibold mb-1" style={t.heading}>Erro na verificação</p>
+                  <p className="text-sm text-red-400 mb-4">{verifyModal.error}</p>
                   <button
                     onClick={() => setVerifyModal(null)}
-                    className="px-6 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm"
+                    className="px-6 py-2 rounded-lg text-sm transition-opacity hover:opacity-80" style={t.cancelBtn}
                   >
                     Fechar
                   </button>
@@ -1324,8 +1356,8 @@ export default function ClubDashboard() {
               ) : verifyModal.result?.updated ? (
                 <>
                   <div className="text-green-500 text-4xl mb-3">✓</div>
-                  <p className="text-gray-800 font-semibold mb-1">Pagamento confirmado!</p>
-                  <p className="text-sm text-gray-500 mb-4">
+                  <p className="font-semibold mb-1" style={t.heading}>Pagamento confirmado!</p>
+                  <p className="text-sm mb-4" style={t.muted}>
                     {verifyModal.playerName} — fichas liberadas
                   </p>
                   <button
@@ -1339,13 +1371,13 @@ export default function ClubDashboard() {
               ) : (
                 <>
                   <div className="text-yellow-500 text-4xl mb-3">⏳</div>
-                  <p className="text-gray-800 font-semibold mb-1">Aguardando pagamento</p>
-                  <p className="text-sm text-gray-500 mb-4">
+                  <p className="font-semibold mb-1" style={t.heading}>Aguardando pagamento</p>
+                  <p className="text-sm mb-4" style={t.muted}>
                     O Mercado Pago ainda não confirmou o pagamento de {verifyModal.playerName}.
                   </p>
                   <button
                     onClick={() => setVerifyModal(null)}
-                    className="px-6 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm"
+                    className="px-6 py-2 rounded-lg text-sm transition-opacity hover:opacity-80" style={t.cancelBtn}
                   >
                     Fechar
                   </button>
