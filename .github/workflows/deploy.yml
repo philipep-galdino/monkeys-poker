@@ -38,8 +38,8 @@ jobs:
 
           SSH_CMD="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_HOST"
 
-          # Pull latest code on the server
-          $SSH_CMD "cd ~/monkeys-poker && git pull origin main"
+          # Pull latest code on the server (force-sync, discarding any local changes)
+          $SSH_CMD "cd ~/monkeys-poker && git fetch origin main && git reset --hard origin/main"
 
           # Sync the built frontend dist to the server
           rsync -avz --delete \
