@@ -408,11 +408,11 @@ export default function ClubDashboard() {
   const cancelBtnCls = "flex-1 py-2 rounded-lg hover:opacity-90 text-sm transition-opacity";
 
   return (
-    <div className="min-h-screen p-6" style={t.shell}>
+    <div className="min-h-screen px-3 py-4 sm:p-6" style={t.shell}>
       <div className="max-w-5xl mx-auto">
         {/* Top nav */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
             {mode === "admin" && (
               <button
                 onClick={() => navigate("/admin/clubs")}
@@ -425,13 +425,13 @@ export default function ClubDashboard() {
               <img src={theme.logo_url} alt="" className="h-8 object-contain" />
             )}
             <h1
-              className="text-2xl font-bold"
+              className="text-xl sm:text-2xl font-bold truncate"
               style={isOwner ? { color: theme.primary_color } : { color: "#1f2937" }}
             >
               {clubName}
             </h1>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 overflow-x-auto">
             {[
               { label: pt.cashKing.title, path: `${basePath}/cash-king` },
               { label: "Histórico", path: `${basePath}/history` },
@@ -440,7 +440,7 @@ export default function ClubDashboard() {
               <button
                 key={item.path}
                 onClick={() => navigate(item.path)}
-                className={isOwner ? "text-sm opacity-70 hover:opacity-100 transition-opacity" : "text-sm text-gray-500 hover:text-gray-700"}
+                className={`text-xs sm:text-sm whitespace-nowrap ${isOwner ? "opacity-70 hover:opacity-100 transition-opacity" : "text-gray-500 hover:text-gray-700"}`}
                 style={isOwner ? { color: theme.text_color } : undefined}
               >
                 {item.label}
@@ -449,7 +449,7 @@ export default function ClubDashboard() {
             {isOwner && (
               <button
                 onClick={() => navigate("/owner/profile")}
-                className="text-sm opacity-70 hover:opacity-100 transition-opacity"
+                className="text-xs sm:text-sm whitespace-nowrap opacity-70 hover:opacity-100 transition-opacity"
                 style={{ color: theme.text_color }}
               >
                 Perfil
@@ -461,7 +461,7 @@ export default function ClubDashboard() {
                 localStorage.removeItem("auth_role");
                 navigate(loginPath);
               }}
-              className={isOwner ? "text-sm opacity-50 hover:opacity-80 transition-opacity" : "text-sm text-gray-500 hover:text-gray-700"}
+              className={`text-xs sm:text-sm whitespace-nowrap ${isOwner ? "opacity-50 hover:opacity-80 transition-opacity" : "text-gray-500 hover:text-gray-700"}`}
               style={isOwner ? { color: theme.text_color } : undefined}
             >
               Sair
@@ -529,9 +529,9 @@ export default function ClubDashboard() {
 
         {/* Create session form */}
         {showCreate && (
-          <div className={cardCls} style={t.card}>
+          <div className="rounded-xl p-4 sm:p-6 mb-6" style={t.card}>
             <h2 className="text-lg font-semibold mb-4">{pt.admin.dashboard.createSessionTitle}</h2>
-            <form onSubmit={handleCreateSession} className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleCreateSession} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="col-span-2">
                 <label className="block text-sm font-medium mb-1">
                   {pt.admin.dashboard.sessionLabel}
@@ -656,11 +656,11 @@ export default function ClubDashboard() {
 
         {/* Session dashboard */}
         {session && (
-          <div className="rounded-xl p-6" style={t.card}>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-xl font-semibold">{session.name}</h2>
-                <p className="text-sm" style={t.muted}>
+          <div className="rounded-xl p-4 sm:p-6" style={t.card}>
+            <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <h2 className="text-lg sm:text-xl font-semibold truncate">{session.name}</h2>
+                <p className="text-xs sm:text-sm" style={t.muted}>
                   Blind {pt.currency(parseFloat(session.blinds_info) || 0)} &middot; Buy-in{" "}
                   {pt.currency(session.buy_in_amount)} &middot;{" "}
                   <span
@@ -674,21 +674,21 @@ export default function ClubDashboard() {
                   </span>
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 shrink-0">
                 {session.status === "open" && (
                   <>
                     <a
                       href={`/tv/${clubId}/${session.id}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="px-3 py-1 rounded text-sm font-medium transition-opacity hover:opacity-80"
+                      className="px-3 py-1.5 rounded text-xs sm:text-sm font-medium transition-opacity hover:opacity-80"
                       style={isOwner ? { backgroundColor: `${theme.primary_color}20`, color: theme.primary_color, border: `1px solid ${theme.primary_color}30` } : { backgroundColor: "#dbeafe", color: "#1d4ed8" }}
                     >
                       {pt.admin.dashboard.tvLobby}
                     </a>
                     <button
                       onClick={() => setShowCloseConfirm(true)}
-                      className="px-3 py-1 bg-red-100 text-red-700 rounded text-sm hover:bg-red-200"
+                      className="px-3 py-1.5 bg-red-100 text-red-700 rounded text-xs sm:text-sm hover:bg-red-200"
                     >
                       {pt.admin.dashboard.closeSession}
                     </button>
@@ -697,7 +697,7 @@ export default function ClubDashboard() {
                 {session.status === "closed" && (
                   <button
                     onClick={() => setShowCreate(true)}
-                    className="px-3 py-1 rounded text-sm transition-opacity hover:opacity-80"
+                    className="px-3 py-1.5 rounded text-xs sm:text-sm transition-opacity hover:opacity-80"
                     style={t.accentBtn || { backgroundColor: "#dbeafe", color: "#1d4ed8" }}
                   >
                     {pt.admin.dashboard.newSession}
@@ -707,7 +707,7 @@ export default function ClubDashboard() {
             </div>
 
             {/* Summary stats */}
-            <div className="grid grid-cols-4 gap-4 mb-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-4">
               {(() => {
                 const isFull = !!(session.table_limit && session.session_players.length >= session.table_limit);
                 const stats = [
@@ -743,146 +743,234 @@ export default function ClubDashboard() {
                   },
                 ];
                 return stats.map((s) => (
-                  <div key={s.label} className="rounded-lg p-3 text-center" style={s.style}>
-                    <p className="text-2xl font-bold" style={{ color: isOwner ? theme.primary_color : undefined }}>{s.value}</p>
-                    <p className="text-xs uppercase font-medium" style={t.muted}>{s.label}</p>
+                  <div key={s.label} className="rounded-lg p-2.5 sm:p-3 text-center" style={s.style}>
+                    <p className="text-lg sm:text-2xl font-bold" style={{ color: isOwner ? theme.primary_color : undefined }}>{s.value}</p>
+                    <p className="text-[10px] sm:text-xs uppercase font-medium" style={t.muted}>{s.label}</p>
                   </div>
                 ));
               })()}
             </div>
 
             {/* Player list */}
-            <div className="flex items-center justify-between mt-8 mb-4">
-              <h3 className="text-lg font-semibold" style={t.heading}>{pt.admin.dashboard.summary.players}</h3>
+            <div className="flex items-center justify-between mt-6 sm:mt-8 mb-4">
+              <h3 className="text-base sm:text-lg font-semibold" style={t.heading}>{pt.admin.dashboard.summary.players}</h3>
               {session.status === "open" && (
                 <button
                   onClick={() => setShowAddPlayer(true)}
-                  className="px-3 py-1 bg-green-100 text-green-700 rounded text-sm hover:bg-green-200"
+                  className="px-3 py-1.5 bg-green-100 text-green-700 rounded text-xs sm:text-sm hover:bg-green-200"
                 >
                   + {pt.admin.dashboard.actions.addPlayer}
                 </button>
               )}
             </div>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left" style={{ ...t.borderB, ...t.muted }}>
-                  <th className="py-2">{pt.admin.dashboard.playersTable.name}</th>
-                  <th className="py-2">{pt.admin.dashboard.playersTable.phone}</th>
-                  <th className="py-2">{pt.admin.dashboard.playersTable.status}</th>
-                  <th className="py-2 text-right">{pt.admin.dashboard.playersTable.chipsIn}</th>
-                  <th className="py-2 text-right">{pt.admin.dashboard.playersTable.chipsOut}</th>
-                  {session.status === "open" && (
-                    <th className="py-2 text-right">{pt.admin.dashboard.playersTable.actions}</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {session.session_players.map((sp) => (
-                  <tr key={sp.id} className="border-b">
-                    <td className="py-3 font-medium">
-                      <button 
-                        onClick={() => openHistory(sp.player.id)}
-                        className="hover:underline text-left cursor-pointer"
-                        style={t.link}
-                      >
-                        {sp.player.name}
-                      </button>
-                    </td>
-                    <td className="py-3" style={t.muted}>{sp.player.phone}</td>
-                    <td className="py-3">
-                      <span
-                        className={`px-2 py-0.5 rounded text-xs font-medium ${
-                          sp.status === "active"
-                            ? "bg-green-500/20 text-green-400"
-                            : sp.status === "waiting_payment"
-                              ? "bg-yellow-500/20 text-yellow-400"
-                              : isOwner ? "bg-white/10 opacity-60" : "bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {pt.status[sp.status as keyof typeof pt.status] || sp.status}
-                      </span>
-                    </td>
-                    <td className="py-3 text-right">
-                      {sp.total_chips_in > 0 ? (
+
+            {/* Desktop table */}
+            <div className="hidden md:block">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left" style={{ ...t.borderB, ...t.muted }}>
+                    <th className="py-2">{pt.admin.dashboard.playersTable.name}</th>
+                    <th className="py-2">{pt.admin.dashboard.playersTable.phone}</th>
+                    <th className="py-2">{pt.admin.dashboard.playersTable.status}</th>
+                    <th className="py-2 text-right">{pt.admin.dashboard.playersTable.chipsIn}</th>
+                    <th className="py-2 text-right">{pt.admin.dashboard.playersTable.chipsOut}</th>
+                    {session.status === "open" && (
+                      <th className="py-2 text-right">{pt.admin.dashboard.playersTable.actions}</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {session.session_players.map((sp) => (
+                    <tr key={sp.id} className="border-b" style={t.borderB}>
+                      <td className="py-3 font-medium">
                         <button
-                          onClick={() => openBreakdown(sp)}
-                          className="hover:underline cursor-pointer"
+                          onClick={() => openHistory(sp.player.id)}
+                          className="hover:underline text-left cursor-pointer"
                           style={t.link}
                         >
+                          {sp.player.name}
+                        </button>
+                      </td>
+                      <td className="py-3" style={t.muted}>{sp.player.phone}</td>
+                      <td className="py-3">
+                        <span
+                          className={`px-2 py-0.5 rounded text-xs font-medium ${
+                            sp.status === "active"
+                              ? "bg-green-500/20 text-green-400"
+                              : sp.status === "waiting_payment"
+                                ? "bg-yellow-500/20 text-yellow-400"
+                                : isOwner ? "bg-white/10 opacity-60" : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {pt.status[sp.status as keyof typeof pt.status] || sp.status}
+                        </span>
+                      </td>
+                      <td className="py-3 text-right">
+                        {sp.total_chips_in > 0 ? (
+                          <button
+                            onClick={() => openBreakdown(sp)}
+                            className="hover:underline cursor-pointer"
+                            style={t.link}
+                          >
+                            {pt.currency(sp.total_chips_in)}
+                          </button>
+                        ) : (
+                          pt.currency(0)
+                        )}
+                      </td>
+                      <td className="py-3 text-right">{sp.total_chips_out > 0 ? pt.currency(sp.total_chips_out) : "—"}</td>
+                      {session.status === "open" && (
+                        <td className="py-3 text-right">
+                          <div className="flex gap-1 justify-end flex-wrap">
+                            {sp.status === "waiting_payment" && (
+                              <>
+                                <button
+                                  onClick={() => handleCashPayment(sp)}
+                                  className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200"
+                                >
+                                  {pt.admin.dashboard.actions.markCash}
+                                </button>
+                                {sp.transactions.some(t => t.status === "pending") && (
+                                  <button
+                                    onClick={() => handleVerify(sp)}
+                                    className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200"
+                                  >
+                                    {pt.admin.dashboard.actions.verifyPayment}
+                                  </button>
+                                )}
+                              </>
+                            )}
+                            {sp.status === "active" && (
+                              <>
+                                {session.allow_rebuys && (
+                                  <button
+                                    onClick={() => handleRebuyCash(sp)}
+                                    className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs hover:bg-purple-200"
+                                  >
+                                    Rebuy
+                                  </button>
+                                )}
+                                {sp.transactions.some(t => t.status === "pending") && (
+                                  <button
+                                    onClick={() => handleVerify(sp)}
+                                    className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200"
+                                  >
+                                    {pt.admin.dashboard.actions.verifyPayment}
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => setCashoutTarget(sp)}
+                                  className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs hover:bg-orange-200"
+                                >
+                                  {pt.admin.dashboard.actions.cashout}
+                                </button>
+                              </>
+                            )}
+                            {sp.status === "cashed_out" && sp.payout_status === "pending" && (
+                              <button
+                                onClick={() => handleMarkPaid(sp.id)}
+                                className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200"
+                              >
+                                Pagar {pt.currency(sp.payout_amount || 0)}
+                              </button>
+                            )}
+                            {sp.status === "cashed_out" && sp.payout_status === "paid" && (
+                              <span className="px-2 py-0.5 bg-green-50 text-green-600 rounded text-xs">
+                                Pago ✓
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="md:hidden space-y-3">
+              {session.session_players.map((sp) => (
+                <div key={sp.id} className="rounded-lg p-3" style={t.stat}>
+                  <div className="flex items-center justify-between mb-2">
+                    <button
+                      onClick={() => openHistory(sp.player.id)}
+                      className="font-medium text-sm hover:underline cursor-pointer truncate mr-2"
+                      style={t.link}
+                    >
+                      {sp.player.name}
+                    </button>
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-medium shrink-0 ${
+                        sp.status === "active"
+                          ? "bg-green-500/20 text-green-400"
+                          : sp.status === "waiting_payment"
+                            ? "bg-yellow-500/20 text-yellow-400"
+                            : isOwner ? "bg-white/10 opacity-60" : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {pt.status[sp.status as keyof typeof pt.status] || sp.status}
+                    </span>
+                  </div>
+                  <p className="text-xs mb-2" style={t.muted}>{sp.player.phone}</p>
+                  <div className="flex items-center gap-4 text-xs mb-2">
+                    <span style={t.muted}>In:{" "}
+                      {sp.total_chips_in > 0 ? (
+                        <button onClick={() => openBreakdown(sp)} className="font-semibold hover:underline" style={t.link}>
                           {pt.currency(sp.total_chips_in)}
                         </button>
                       ) : (
-                        pt.currency(0)
+                        <span className="font-semibold" style={t.heading}>{pt.currency(0)}</span>
                       )}
-                    </td>
-                    <td className="py-3 text-right">{sp.total_chips_out > 0 ? pt.currency(sp.total_chips_out) : "—"}</td>
-                    {session.status === "open" && (
-                      <td className="py-3 text-right">
-                        <div className="flex gap-1 justify-end flex-wrap">
-                          {sp.status === "waiting_payment" && (
-                            <>
-                              <button
-                                onClick={() => handleCashPayment(sp)}
-                                className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200"
-                              >
-                                {pt.admin.dashboard.actions.markCash}
-                              </button>
-                              {sp.transactions.some(t => t.status === "pending") && (
-                                <button
-                                  onClick={() => handleVerify(sp)}
-                                  className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200"
-                                >
-                                  {pt.admin.dashboard.actions.verifyPayment}
-                                </button>
-                              )}
-                            </>
-                          )}
-                          {sp.status === "active" && (
-                            <>
-                              {session.allow_rebuys && (
-                                <button
-                                  onClick={() => handleRebuyCash(sp)}
-                                  className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs hover:bg-purple-200"
-                                >
-                                  Rebuy
-                                </button>
-                              )}
-                              {sp.transactions.some(t => t.status === "pending") && (
-                                <button
-                                  onClick={() => handleVerify(sp)}
-                                  className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200"
-                                >
-                                  {pt.admin.dashboard.actions.verifyPayment}
-                                </button>
-                              )}
-                              <button
-                                onClick={() => setCashoutTarget(sp)}
-                                className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs hover:bg-orange-200"
-                              >
-                                {pt.admin.dashboard.actions.cashout}
-                              </button>
-                            </>
-                          )}
-                          {sp.status === "cashed_out" && sp.payout_status === "pending" && (
-                            <button
-                              onClick={() => handleMarkPaid(sp.id)}
-                              className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200"
-                            >
-                              Pagar {pt.currency(sp.payout_amount || 0)}
+                    </span>
+                    <span style={t.muted}>Out:{" "}
+                      <span className="font-semibold" style={t.heading}>{sp.total_chips_out > 0 ? pt.currency(sp.total_chips_out) : "—"}</span>
+                    </span>
+                  </div>
+                  {session.status === "open" && (
+                    <div className="flex gap-1.5 flex-wrap">
+                      {sp.status === "waiting_payment" && (
+                        <>
+                          <button onClick={() => handleCashPayment(sp)} className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200">
+                            {pt.admin.dashboard.actions.markCash}
+                          </button>
+                          {sp.transactions.some(t => t.status === "pending") && (
+                            <button onClick={() => handleVerify(sp)} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200">
+                              {pt.admin.dashboard.actions.verifyPayment}
                             </button>
                           )}
-                          {sp.status === "cashed_out" && sp.payout_status === "paid" && (
-                            <span className="px-2 py-0.5 bg-green-50 text-green-600 rounded text-xs">
-                              Pago ✓
-                            </span>
+                        </>
+                      )}
+                      {sp.status === "active" && (
+                        <>
+                          {session.allow_rebuys && (
+                            <button onClick={() => handleRebuyCash(sp)} className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs hover:bg-purple-200">
+                              Rebuy
+                            </button>
                           )}
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                          {sp.transactions.some(t => t.status === "pending") && (
+                            <button onClick={() => handleVerify(sp)} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200">
+                              {pt.admin.dashboard.actions.verifyPayment}
+                            </button>
+                          )}
+                          <button onClick={() => setCashoutTarget(sp)} className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs hover:bg-orange-200">
+                            {pt.admin.dashboard.actions.cashout}
+                          </button>
+                        </>
+                      )}
+                      {sp.status === "cashed_out" && sp.payout_status === "pending" && (
+                        <button onClick={() => handleMarkPaid(sp.id)} className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200">
+                          Pagar {pt.currency(sp.payout_amount || 0)}
+                        </button>
+                      )}
+                      {sp.status === "cashed_out" && sp.payout_status === "paid" && (
+                        <span className="px-2 py-0.5 bg-green-50 text-green-600 rounded text-xs">Pago ✓</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
 
             {session.session_players.length === 0 && (
               <p className="text-center py-8" style={t.muted}>
@@ -1178,7 +1266,7 @@ export default function ClubDashboard() {
         {/* Player History Modal */}
         {historyTargetId && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className={`${isOwner ? '' : 'bg-white'} rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto`} style={isOwner ? { backgroundColor: `color-mix(in srgb, ${theme.bg_color} 95%, white)`, border: `1px solid ${theme.text_color}15`, color: theme.text_color } : undefined}>
+            <div className={`${isOwner ? '' : 'bg-white'} rounded-xl p-4 sm:p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto`} style={isOwner ? { backgroundColor: `color-mix(in srgb, ${theme.bg_color} 95%, white)`, border: `1px solid ${theme.text_color}15`, color: theme.text_color } : undefined}>
               <div className="flex justify-between items-center border-b pb-4 mb-4" style={t.borderB}>
                 <h3 className="text-xl font-bold" style={t.heading}>{pt.admin.playerHistory.title}</h3>
                 <button
