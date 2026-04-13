@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiError, SessionResponse } from "@/api/client";
 import { useAppMode } from "@/hooks/useAppMode";
+import { useClubTheme } from "@/hooks/useClubTheme";
 import { pt } from "@/strings";
 
 export default function SessionHistory() {
@@ -9,6 +10,7 @@ export default function SessionHistory() {
   const navigate = useNavigate();
   const token = localStorage.getItem("admin_token") ?? "";
   const { basePath, loginPath } = useAppMode(clubId);
+  useClubTheme(clubId);
 
   const [sessions, setSessions] = useState<SessionResponse[]>([]);
   const [total, setTotal] = useState(0);
@@ -39,35 +41,35 @@ export default function SessionHistory() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <p className="text-gray-500">{pt.loading}</p>
+      <div className="themed-shell flex items-center justify-center">
+        <p className="themed-muted">{pt.loading}</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
+    <div className="themed-shell p-6">
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center gap-4 mb-6">
           <button
             onClick={() => navigate(basePath)}
-            className="text-sm text-gray-500 hover:text-gray-700"
+            className="themed-muted hover:opacity-100 text-sm"
           >
             &larr; Painel
           </button>
-          <h1 className="text-2xl font-bold text-gray-800">Histórico de Sessões</h1>
-          <span className="text-sm text-gray-400">{total} sessões</span>
+          <h1 className="text-2xl font-bold themed-heading">Histórico de Sessões</h1>
+          <span className="text-sm themed-muted">{total} sessões</span>
         </div>
 
         {sessions.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-md p-12 text-center">
-            <p className="text-gray-400">Nenhuma sessão encontrada</p>
+          <div className="themed-card p-12 text-center">
+            <p className="themed-muted">Nenhuma sessão encontrada</p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-md overflow-hidden">
+          <div className="themed-card overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left text-gray-500 bg-gray-50">
+                <tr className="border-b themed-divider text-left themed-muted" style={{ backgroundColor: "color-mix(in srgb, var(--club-bg) 80%, white)" }}>
                   <th className="py-3 px-4">Sessão</th>
                   <th className="py-3 px-4">Data</th>
                   <th className="py-3 px-4 text-center">Jogadores</th>
@@ -79,11 +81,14 @@ export default function SessionHistory() {
                 {sessions.map((s) => (
                   <tr
                     key={s.id}
-                    className="border-b hover:bg-gray-50 cursor-pointer"
+                    className="border-b themed-divider cursor-pointer transition-colors"
+                    style={{ backgroundColor: "transparent" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "color-mix(in srgb, var(--club-text) 5%, transparent)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
                     onClick={() => navigate(`${basePath}/sessions/${s.id}`)}
                   >
                     <td className="py-3 px-4 font-medium">{s.name}</td>
-                    <td className="py-3 px-4 text-gray-500">
+                    <td className="py-3 px-4 themed-muted">
                       {new Date(s.created_at).toLocaleDateString("pt-BR")}
                     </td>
                     <td className="py-3 px-4 text-center">{s.player_count}</td>
@@ -91,8 +96,8 @@ export default function SessionHistory() {
                       <span
                         className={`px-2 py-0.5 rounded text-xs font-medium ${
                           s.status === "open"
-                            ? "bg-green-100 text-green-700"
-                            : "bg-gray-100 text-gray-600"
+                            ? "bg-green-500/20 text-green-400"
+                            : "bg-white/10 themed-muted"
                         }`}
                       >
                         {s.status === "open" ? "ABERTA" : "FECHADA"}
@@ -108,21 +113,21 @@ export default function SessionHistory() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 p-4 border-t">
+              <div className="flex items-center justify-center gap-2 p-4 border-t themed-divider">
                 <button
                   onClick={() => setPage(Math.max(0, page - 1))}
                   disabled={page === 0}
-                  className="px-3 py-1 rounded text-sm border disabled:opacity-30"
+                  className="themed-btn-ghost px-3 py-1 text-sm disabled:opacity-30"
                 >
                   Anterior
                 </button>
-                <span className="text-sm text-gray-500">
+                <span className="text-sm themed-muted">
                   {page + 1} / {totalPages}
                 </span>
                 <button
                   onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
                   disabled={page >= totalPages - 1}
-                  className="px-3 py-1 rounded text-sm border disabled:opacity-30"
+                  className="themed-btn-ghost px-3 py-1 text-sm disabled:opacity-30"
                 >
                   Próxima
                 </button>
