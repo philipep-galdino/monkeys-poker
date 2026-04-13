@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.models import PaymentPix, Session, SessionPlayer, Transaction
+from app.models import Club, PaymentPix, Session, SessionPlayer, Transaction
 from app.schemas import BuyinResponse
 from app.services.payment_service import payment_service
 from app.services.websocket_manager import manager
@@ -40,9 +40,19 @@ async def _create_pix_transaction(
     db: AsyncSession,
 ) -> BuyinResponse:
     """Shared logic for buy-in and rebuy: check for pending, create MP payment, store records."""
+    # Load club to determine payment mode
+    club = await db.get(Club, session.club_id)
+
     # Check for existing pending transaction of same type
     for tx in sp.transactions:
         if tx.type == tx_type and tx.status == "pending":
+            if club and club.payment_mode == "static_pix":
+                return BuyinResponse(
+                    transaction_id=tx.id,
+                    payment_mode="static_pix",
+                    amount=float(tx.amount),
+                    pix_key=club.pix_key,
+                )
             result = await db.execute(
                 select(PaymentPix).where(PaymentPix.transaction_id == tx.id)
             )
@@ -50,6 +60,7 @@ async def _create_pix_transaction(
             if existing_pix:
                 return BuyinResponse(
                     transaction_id=tx.id,
+                    payment_mode="mercado_pago",
                     qr_code_base64=existing_pix.qr_code_base64,
                     qr_code=existing_pix.qr_code,
                     amount=float(tx.amount),
@@ -58,13 +69,43 @@ async def _create_pix_transaction(
 
     rake = float(session.rake_buyin) if tx_type == "buy_in" else float(session.rake_rebuy)
     chip_count = int(amount - rake)
-    description = f"{'Buy-in' if tx_type == 'buy_in' else 'Rebuy'} {session.name}"
 
     # Get physical count from session kits
     kit = session.buyin_kit if tx_type == "buy_in" else session.rebuy_kit
     physical_count = kit.get("total_chips_count", 0) if kit else 0
 
-    # Create transaction record first (we need its ID for external_reference)
+    # ── Static Pix path ─────────────────────────────────────────
+    if club and club.payment_mode == "static_pix":
+        transaction = Transaction(
+            session_player_id=sp.id,
+            type=tx_type,
+            amount=amount,
+            chip_count=chip_count,
+            physical_chip_count=physical_count,
+            rake_amount=rake,
+            payment_method="pix_manual",
+            status="pending",
+        )
+        db.add(transaction)
+        await db.flush()
+
+        await manager.broadcast(session.id, "payment_pending", {
+            "player_id": str(sp.player_id),
+            "player_name": sp.player.name if sp.player else "Unknown",
+            "type": tx_type,
+            "amount": amount,
+        })
+
+        return BuyinResponse(
+            transaction_id=transaction.id,
+            payment_mode="static_pix",
+            amount=float(amount),
+            pix_key=club.pix_key,
+        )
+
+    # ── Mercado Pago path ───────────────────────────────────────
+    description = f"{'Buy-in' if tx_type == 'buy_in' else 'Rebuy'} {session.name}"
+
     transaction = Transaction(
         session_player_id=sp.id,
         type=tx_type,
@@ -80,7 +121,10 @@ async def _create_pix_transaction(
 
     # Build a per-player email for MP (they require an email field)
     player_phone = sp.player.phone if sp.player else ""
-    payer_email = f"jogador.{player_phone}@pokerclub.local" if player_phone else ""
+    payer_email = f"jogador.{player_phone}@pokerclub.com.br" if player_phone else ""
+
+    # Use club's MP credentials if available, otherwise fall back to global
+    mp_token = (club.mp_access_token if club else None) or None
 
     # Call MP API — if it fails, rollback the transaction record
     try:
@@ -89,8 +133,11 @@ async def _create_pix_transaction(
             description=description,
             external_reference=str(transaction.id),
             payer_email=payer_email,
+            access_token=mp_token,
         )
-    except Exception:
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).exception("MP payment creation failed: %s", exc)
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -107,8 +154,16 @@ async def _create_pix_transaction(
     db.add(pix)
     await db.flush()
 
+    await manager.broadcast(session.id, "payment_pending", {
+        "player_id": str(sp.player_id),
+        "player_name": sp.player.name if sp.player else "Unknown",
+        "type": tx_type,
+        "amount": amount,
+    })
+
     return BuyinResponse(
         transaction_id=transaction.id,
+        payment_mode="mercado_pago",
         qr_code_base64=pix.qr_code_base64,
         qr_code=pix.qr_code,
         amount=float(amount),

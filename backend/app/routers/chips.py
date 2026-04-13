@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_admin
+from app.auth import AuthUser, get_current_admin
 from app.database import get_db
 from app.models import ChipDenomination, Club
 from app.schemas import (
@@ -22,7 +22,7 @@ router = APIRouter(prefix="/clubs/{club_id}", tags=["chips"])
 async def list_chip_denominations(
     club_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _admin: str = Depends(get_current_admin),
+    _admin: AuthUser = Depends(get_current_admin),
 ):
     """List all chip denominations for a club."""
     club = await db.get(Club, club_id)
@@ -42,7 +42,7 @@ async def set_chip_denominations(
     club_id: uuid.UUID,
     items: list[ChipDenominationItem],
     db: AsyncSession = Depends(get_db),
-    _admin: str = Depends(get_current_admin),
+    _admin: AuthUser = Depends(get_current_admin),
 ):
     """Bulk set chip denominations for a club. Replaces all existing denominations."""
     club = await db.get(Club, club_id)

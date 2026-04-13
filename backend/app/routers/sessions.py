@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.auth import get_current_admin
+from app.auth import AuthUser, get_current_admin
 from app.database import get_db
 from app.models import Club, Player, Session, SessionPlayer, Transaction
 from app.schemas import (
@@ -42,7 +42,7 @@ async def create_session(
     club_id: uuid.UUID,
     data: SessionCreate,
     db: AsyncSession = Depends(get_db),
-    _admin: str = Depends(get_current_admin),
+    _admin: AuthUser = Depends(get_current_admin),
 ):
     """Create a new poker session. Only one open session per club is allowed."""
     club = await _get_club(club_id, db)
@@ -106,7 +106,7 @@ async def list_sessions(
     limit: int = 20,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
-    _admin: str = Depends(get_current_admin),
+    _admin: AuthUser = Depends(get_current_admin),
 ):
     """List sessions for a club with optional status filter, ordered by newest first."""
     await _get_club(club_id, db)
@@ -328,6 +328,7 @@ async def get_player_session(
         id=sp.id,
         session_id=sp.session_id,
         session_name=sp.session.name,
+        player_id=sp.player_id,
         player_name=sp.player.name,
         status=sp.status,
         total_chips_in=sp.total_chips_in,
@@ -335,6 +336,7 @@ async def get_player_session(
         total_chips_out=sp.total_chips_out,
         blind_value=blind_val,
         blinds_count=blinds_count,
+        cash_king_enabled=sp.session.cash_king_enabled,
         transactions=[TransactionResponse.model_validate(t) for t in sp.transactions],
     )
 

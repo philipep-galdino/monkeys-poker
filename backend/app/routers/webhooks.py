@@ -11,7 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database import async_session
-from app.models import PaymentPix, SessionPlayer, Transaction
+from app.models import Club, PaymentPix, Session, SessionPlayer, Transaction
 from app.services.payment_service import payment_service
 from app.services.websocket_manager import manager
 
@@ -56,7 +56,7 @@ async def _process_rejected_payment(
     await db.flush()
 
 
-def _verify_mp_signature(request: Request, data_id: str) -> bool:
+def _verify_mp_signature(request: Request, data_id: str, webhook_secret: str | None = None) -> bool:
     """Validate Mercado Pago webhook signature using HMAC-SHA256.
 
     MP sends:
@@ -65,7 +65,7 @@ def _verify_mp_signature(request: Request, data_id: str) -> bool:
 
     Manifest to sign: "id:<data.id>;request-id:<x-request-id>;ts:<ts>;"
     """
-    secret = settings.mp_webhook_secret
+    secret = webhook_secret or settings.mp_webhook_secret
     if not secret:
         # No secret configured — skip validation (dev/mock mode)
         return True
@@ -120,10 +120,6 @@ async def mercadopago_webhook(request: Request):
     if not mp_payment_id:
         return JSONResponse({"status": "no_payment_id"})
 
-    if not _verify_mp_signature(request, mp_payment_id):
-        logger.warning("Rejected webhook with invalid signature for payment %s", mp_payment_id)
-        return JSONResponse({"status": "invalid_signature"})
-
     try:
         async with async_session() as db:
             result = await db.execute(
@@ -133,6 +129,9 @@ async def mercadopago_webhook(request: Request):
                     selectinload(PaymentPix.transaction)
                     .selectinload(Transaction.session_player)
                     .selectinload(SessionPlayer.player),
+                    selectinload(PaymentPix.transaction)
+                    .selectinload(Transaction.session_player)
+                    .selectinload(SessionPlayer.session),
                 )
             )
             pix = result.scalar_one_or_none()
@@ -140,13 +139,23 @@ async def mercadopago_webhook(request: Request):
             if not pix:
                 return JSONResponse({"status": "not_found"})
 
+            # Load club to get per-club MP credentials
+            sp = pix.transaction.session_player
+            club = await db.get(Club, sp.session.club_id) if sp.session else None
+            club_webhook_secret = (club.mp_webhook_secret if club else None) or None
+            club_access_token = (club.mp_access_token if club else None) or None
+
+            if not _verify_mp_signature(request, mp_payment_id, club_webhook_secret):
+                logger.warning("Rejected webhook with invalid signature for payment %s", mp_payment_id)
+                return JSONResponse({"status": "invalid_signature"})
+
             # Idempotency: already processed
             if pix.status == "approved":
                 return JSONResponse({"status": "already_processed"})
 
             # Fetch current status from MP API
             try:
-                mp_status = payment_service.get_payment_status(mp_payment_id)
+                mp_status = payment_service.get_payment_status(mp_payment_id, access_token=club_access_token)
             except Exception:
                 return JSONResponse({"status": "mp_api_error"})
 
