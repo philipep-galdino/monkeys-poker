@@ -59,18 +59,18 @@ export default function SessionDetail() {
   const totalChipsOut = session.session_players.reduce((s, sp) => s + sp.total_chips_out, 0);
 
   return (
-    <div className="themed-shell p-6">
+    <div className="themed-shell px-3 py-4 sm:p-6">
       <div className="max-w-4xl mx-auto">
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex items-center gap-3 mb-6">
           <button
             onClick={() => navigate(`${basePath}/history`)}
             className="themed-muted hover:opacity-100 text-sm"
           >
             &larr; Histórico
           </button>
-          <div>
-            <h1 className="text-2xl font-bold themed-heading">{session.name}</h1>
-            <p className="text-sm themed-muted">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold themed-heading truncate">{session.name}</h1>
+            <p className="text-xs sm:text-sm themed-muted">
               {new Date(session.created_at).toLocaleDateString("pt-BR")} &middot;
               Blind {pt.currency(parseFloat(session.blinds_info) || 0)} &middot;{" "}
               <span
@@ -85,16 +85,16 @@ export default function SessionDetail() {
         </div>
 
         {/* Summary */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
           {[
             { value: session.session_players.length, label: "Jogadores" },
             { value: totalChipsIn, label: "Fichas In" },
             { value: pt.currency(totalPix), label: "Pix" },
             { value: pt.currency(totalCash), label: "Dinheiro" },
           ].map((stat) => (
-            <div key={stat.label} className="themed-card p-4 text-center">
-              <p className="text-2xl font-bold">{stat.value}</p>
-              <p className="text-xs themed-muted">{stat.label}</p>
+            <div key={stat.label} className="themed-card p-3 sm:p-4 text-center">
+              <p className="text-lg sm:text-2xl font-bold">{stat.value}</p>
+              <p className="text-[10px] sm:text-xs themed-muted">{stat.label}</p>
             </div>
           ))}
         </div>
@@ -107,8 +107,8 @@ export default function SessionDetail() {
           </div>
         )}
 
-        {/* Player table */}
-        <div className="themed-card overflow-hidden">
+        {/* Player table — desktop */}
+        <div className="themed-card overflow-hidden hidden md:block">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b themed-divider text-left themed-muted" style={{ backgroundColor: "color-mix(in srgb, var(--club-bg) 80%, white)" }}>
@@ -147,6 +147,34 @@ export default function SessionDetail() {
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Player cards — mobile */}
+        <div className="md:hidden space-y-3">
+          {session.session_players.map((sp) => (
+            <div key={sp.id} className="themed-card p-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="font-medium text-sm truncate mr-2">{sp.player.name}</span>
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-medium shrink-0 ${
+                    sp.status === "active"
+                      ? "bg-green-500/20 text-green-400"
+                      : sp.status === "waiting_payment"
+                        ? "bg-yellow-500/20 text-yellow-400"
+                        : "bg-white/10 themed-muted"
+                  }`}
+                >
+                  {pt.status[sp.status as keyof typeof pt.status] || sp.status}
+                </span>
+              </div>
+              <p className="text-xs themed-muted mb-2">{sp.player.phone}</p>
+              <div className="flex items-center gap-4 text-xs themed-muted">
+                <span>In: <strong className="themed-heading">{sp.total_chips_in}</strong></span>
+                <span>Out: <strong className="themed-heading">{sp.total_chips_out}</strong></span>
+                <span>Txns: <strong className="themed-heading">{sp.transactions.filter((t) => t.status === "confirmed").length}</strong></span>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
