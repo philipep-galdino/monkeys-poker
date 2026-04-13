@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiError, SessionDetailResponse } from "@/api/client";
 import { useAppMode } from "@/hooks/useAppMode";
+import { useClubTheme } from "@/hooks/useClubTheme";
 import { pt } from "@/strings";
 
 export default function SessionDetail() {
   const { clubId, sessionId } = useParams<{ clubId: string; sessionId: string }>();
   const navigate = useNavigate();
   const { basePath } = useAppMode(clubId);
+  useClubTheme(clubId);
 
   const [session, setSession] = useState<SessionDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -30,16 +32,16 @@ export default function SessionDetail() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <p className="text-gray-500">{pt.loading}</p>
+      <div className="themed-shell flex items-center justify-center">
+        <p className="themed-muted">{pt.loading}</p>
       </div>
     );
   }
 
   if (!session) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <p className="text-gray-500">Sessão não encontrada</p>
+      <div className="themed-shell flex items-center justify-center">
+        <p className="themed-muted">Sessão não encontrada</p>
       </div>
     );
   }
@@ -57,23 +59,23 @@ export default function SessionDetail() {
   const totalChipsOut = session.session_players.reduce((s, sp) => s + sp.total_chips_out, 0);
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
+    <div className="themed-shell p-6">
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center gap-4 mb-6">
           <button
             onClick={() => navigate(`${basePath}/history`)}
-            className="text-sm text-gray-500 hover:text-gray-700"
+            className="themed-muted hover:opacity-100 text-sm"
           >
             &larr; Histórico
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">{session.name}</h1>
-            <p className="text-sm text-gray-500">
+            <h1 className="text-2xl font-bold themed-heading">{session.name}</h1>
+            <p className="text-sm themed-muted">
               {new Date(session.created_at).toLocaleDateString("pt-BR")} &middot;
               Blind {pt.currency(parseFloat(session.blinds_info) || 0)} &middot;{" "}
               <span
                 className={
-                  session.status === "open" ? "text-green-600" : "text-gray-400"
+                  session.status === "open" ? "text-green-400" : "themed-muted"
                 }
               >
                 {session.status === "open" ? "ABERTA" : "ENCERRADA"}
@@ -84,37 +86,32 @@ export default function SessionDetail() {
 
         {/* Summary */}
         <div className="grid grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg shadow p-4 text-center">
-            <p className="text-2xl font-bold">{session.session_players.length}</p>
-            <p className="text-xs text-gray-500">Jogadores</p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-4 text-center">
-            <p className="text-2xl font-bold">{totalChipsIn}</p>
-            <p className="text-xs text-gray-500">Fichas In</p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-4 text-center">
-            <p className="text-2xl font-bold">{pt.currency(totalPix)}</p>
-            <p className="text-xs text-gray-500">Pix</p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-4 text-center">
-            <p className="text-2xl font-bold">{pt.currency(totalCash)}</p>
-            <p className="text-xs text-gray-500">Dinheiro</p>
-          </div>
+          {[
+            { value: session.session_players.length, label: "Jogadores" },
+            { value: totalChipsIn, label: "Fichas In" },
+            { value: pt.currency(totalPix), label: "Pix" },
+            { value: pt.currency(totalCash), label: "Dinheiro" },
+          ].map((stat) => (
+            <div key={stat.label} className="themed-card p-4 text-center">
+              <p className="text-2xl font-bold">{stat.value}</p>
+              <p className="text-xs themed-muted">{stat.label}</p>
+            </div>
+          ))}
         </div>
 
         {/* Discrepancy */}
         {session.status === "closed" && totalChipsIn !== totalChipsOut && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 text-yellow-700 text-sm">
+          <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-3 mb-4 text-yellow-300 text-sm">
             Discrepância: {Math.abs(totalChipsIn - totalChipsOut)} fichas
             ({totalChipsIn} in, {totalChipsOut} out)
           </div>
         )}
 
         {/* Player table */}
-        <div className="bg-white rounded-xl shadow-md overflow-hidden">
+        <div className="themed-card overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b text-left text-gray-500 bg-gray-50">
+              <tr className="border-b themed-divider text-left themed-muted" style={{ backgroundColor: "color-mix(in srgb, var(--club-bg) 80%, white)" }}>
                 <th className="py-3 px-4">Jogador</th>
                 <th className="py-3 px-4">Telefone</th>
                 <th className="py-3 px-4 text-center">Status</th>
@@ -125,17 +122,17 @@ export default function SessionDetail() {
             </thead>
             <tbody>
               {session.session_players.map((sp) => (
-                <tr key={sp.id} className="border-b">
+                <tr key={sp.id} className="border-b themed-divider">
                   <td className="py-3 px-4 font-medium">{sp.player.name}</td>
-                  <td className="py-3 px-4 text-gray-500">{sp.player.phone}</td>
+                  <td className="py-3 px-4 themed-muted">{sp.player.phone}</td>
                   <td className="py-3 px-4 text-center">
                     <span
                       className={`px-2 py-0.5 rounded text-xs font-medium ${
                         sp.status === "active"
-                          ? "bg-green-100 text-green-700"
+                          ? "bg-green-500/20 text-green-400"
                           : sp.status === "waiting_payment"
-                            ? "bg-yellow-100 text-yellow-700"
-                            : "bg-gray-100 text-gray-600"
+                            ? "bg-yellow-500/20 text-yellow-400"
+                            : "bg-white/10 themed-muted"
                       }`}
                     >
                       {pt.status[sp.status as keyof typeof pt.status] || sp.status}
