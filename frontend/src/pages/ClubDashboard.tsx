@@ -1,7 +1,9 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api, ApiError, SessionDetailResponse, SessionPlayerData, ChipBreakdownData } from "@/api/client";
+import { api, ApiError, SessionDetailResponse, SessionPlayerData, ChipBreakdownData, CashoutResult } from "@/api/client";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useAppMode } from "@/hooks/useAppMode";
+import { useClubTheme } from "@/hooks/useClubTheme";
 import { pt } from "@/strings";
 
 function formatPhone(value: string): string {
@@ -29,6 +31,8 @@ export default function ClubDashboard() {
   const { clubId } = useParams<{ clubId: string }>();
   const navigate = useNavigate();
   const token = localStorage.getItem("admin_token") ?? "";
+  const { mode, basePath, loginPath } = useAppMode(clubId);
+  const theme = useClubTheme(mode === "owner" ? clubId : undefined);
 
   const [clubName, setClubName] = useState("");
   const [session, setSession] = useState<SessionDetailResponse | null>(null);
@@ -44,11 +48,22 @@ export default function ClubDashboard() {
     rebuy_amount: "",
     allow_rebuys: true,
     table_limit: "9",
+    cash_king_enabled: false,
   });
 
   // Cashout dialog
   const [cashoutTarget, setCashoutTarget] = useState<SessionPlayerData | null>(null);
   const [cashoutChips, setCashoutChips] = useState("");
+  const [cashoutCroupierHours, setCashoutCroupierHours] = useState("");
+  const [cashoutResult, setCashoutResult] = useState<{
+    playerName: string;
+    net_result: number;
+    payout_amount: number | null;
+    pix_key: string | null;
+    payout_status: string | null;
+    session_player_id: string;
+    cash_king_pts: number | null;
+  } | null>(null);
 
   // Close session dialog
   const [reconciliation, setReconciliation] = useState<ReconciliationData | null>(null);
@@ -57,6 +72,14 @@ export default function ClubDashboard() {
 
   // Action feedback
   const [actionMsg, setActionMsg] = useState("");
+
+  // Verify payment modal
+  const [verifyModal, setVerifyModal] = useState<{
+    playerName: string;
+    loading: boolean;
+    result: null | { mp_status: string; updated: boolean };
+    error: string | null;
+  } | null>(null);
 
   // Add player dialog
   const [showAddPlayer, setShowAddPlayer] = useState(false);
@@ -100,14 +123,14 @@ export default function ClubDashboard() {
       }
     } catch (err) {
       if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
-        navigate("/admin");
+        navigate(loginPath);
         return;
       }
       setError("Failed to load sessions");
     } finally {
       setLoading(false);
     }
-  }, [clubId, token, navigate]);
+  }, [clubId, token, navigate, loginPath]);
 
   useEffect(() => {
     loadSession();
@@ -135,6 +158,7 @@ export default function ClubDashboard() {
           rebuy_amount: parseFloat(createForm.rebuy_amount),
           allow_rebuys: createForm.allow_rebuys,
           table_limit: parseInt(createForm.table_limit) || 9,
+          cash_king_enabled: createForm.cash_king_enabled,
         },
         token,
       );
@@ -235,14 +259,18 @@ export default function ClubDashboard() {
 
   const handleVerify = async (sp: SessionPlayerData) => {
     if (!session || !clubId) return;
+    setVerifyModal({ playerName: sp.player.name, loading: true, result: null, error: null });
     try {
       const result = await api.verifyPayment(clubId, session.id, sp.id, token);
-      setActionMsg(
-        `${sp.player.name}: MP status = ${result.mp_status}${result.updated ? " (updated)" : ""}`,
-      );
+      setVerifyModal({ playerName: sp.player.name, loading: false, result, error: null });
       if (result.updated) await loadSession();
     } catch (err) {
-      setActionMsg(err instanceof ApiError ? err.detail : "Error");
+      setVerifyModal({
+        playerName: sp.player.name,
+        loading: false,
+        result: null,
+        error: err instanceof ApiError ? err.detail : "Erro ao verificar pagamento",
+      });
     }
   };
 
@@ -261,11 +289,35 @@ export default function ClubDashboard() {
     if (!session || !cashoutTarget || !clubId) return;
     const chips = parseInt(cashoutChips);
     if (isNaN(chips) || chips < 0) return;
+    const croupierHrs = cashoutCroupierHours ? parseFloat(cashoutCroupierHours) : undefined;
     try {
-      await api.cashoutPlayer(clubId, session.id, cashoutTarget.id, chips, token);
-      setActionMsg(`${cashoutTarget.player.name} cashed out with ${chips} chips`);
+      const result = await api.cashoutPlayer(
+        clubId, session.id, cashoutTarget.id, chips, token, undefined, croupierHrs,
+      );
+      setCashoutResult({
+        playerName: cashoutTarget.player.name,
+        net_result: result.net_result,
+        payout_amount: result.payout_amount,
+        pix_key: result.pix_key,
+        payout_status: result.payout_status,
+        session_player_id: result.session_player_id,
+        cash_king_pts: result.cash_king_pts,
+      });
       setCashoutTarget(null);
       setCashoutChips("");
+      setCashoutCroupierHours("");
+      await loadSession();
+    } catch (err) {
+      setActionMsg(err instanceof ApiError ? err.detail : "Error");
+    }
+  };
+
+  const handleMarkPaid = async (sessionPlayerId: string) => {
+    if (!session || !clubId) return;
+    try {
+      await api.markPayoutPaid(clubId, session.id, sessionPlayerId, token);
+      setCashoutResult(null);
+      setActionMsg("Pagamento marcado como realizado");
       await loadSession();
     } catch (err) {
       setActionMsg(err instanceof ApiError ? err.detail : "Error");
@@ -308,39 +360,83 @@ export default function ClubDashboard() {
     );
   }
 
+  const isOwner = mode === "owner";
+  const cardClass = isOwner ? "rounded-xl p-6 mb-6" : "bg-white rounded-xl shadow-md p-6 mb-6";
+  const cardStyle = isOwner ? { backgroundColor: `${theme.text_color}08`, border: `1px solid ${theme.text_color}15` } : undefined;
+  const labelClass = isOwner ? "text-sm font-medium mb-1" : "text-sm font-medium text-gray-700 mb-1";
+  const labelStyle = isOwner ? { color: `${theme.text_color}bb` } : undefined;
+  const inputClass = isOwner
+    ? "w-full px-3 py-2 rounded-lg outline-none"
+    : "w-full px-3 py-2 border rounded-lg";
+  const inputStyle = isOwner
+    ? { backgroundColor: `${theme.text_color}10`, border: `1px solid ${theme.text_color}20`, color: theme.text_color }
+    : undefined;
+  const btnPrimaryClass = isOwner
+    ? "font-semibold py-2 rounded-lg transition-opacity"
+    : "bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700";
+  const btnPrimaryStyle = isOwner
+    ? { backgroundColor: theme.accent_color, color: theme.text_color }
+    : undefined;
+
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
+    <div
+      className="min-h-screen p-6"
+      style={isOwner ? { backgroundColor: theme.bg_color, color: theme.text_color, fontFamily: theme.font_family } : { backgroundColor: "#f3f4f6" }}
+    >
       <div className="max-w-5xl mx-auto">
         {/* Top nav */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate("/admin/clubs")}
-              className="text-sm text-gray-500 hover:text-gray-700"
+            {mode === "admin" && (
+              <button
+                onClick={() => navigate("/admin/clubs")}
+                className="text-sm text-gray-500 hover:text-gray-700"
+              >
+                &larr; Clubes
+              </button>
+            )}
+            {isOwner && theme.logo_url && (
+              <img src={theme.logo_url} alt="" className="h-8 object-contain" />
+            )}
+            <h1
+              className="text-2xl font-bold"
+              style={isOwner ? { color: theme.primary_color } : { color: "#1f2937" }}
             >
-              &larr; Clubes
-            </button>
-            <h1 className="text-2xl font-bold text-gray-800">{clubName}</h1>
+              {clubName}
+            </h1>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate(`/admin/clubs/${clubId}/history`)}
-              className="text-sm text-gray-500 hover:text-gray-700"
-            >
-              Histórico
-            </button>
-            <button
-              onClick={() => navigate(`/admin/clubs/${clubId}/settings`)}
-              className="text-sm text-gray-500 hover:text-gray-700"
-            >
-              {pt.admin.clubs.settingsTitle}
-            </button>
+            {[
+              { label: pt.cashKing.title, path: `${basePath}/cash-king` },
+              { label: "Histórico", path: `${basePath}/history` },
+              { label: pt.admin.clubs.settingsTitle, path: `${basePath}/settings` },
+            ].map((item) => (
+              <button
+                key={item.path}
+                onClick={() => navigate(item.path)}
+                className={isOwner ? "text-sm opacity-70 hover:opacity-100 transition-opacity" : "text-sm text-gray-500 hover:text-gray-700"}
+                style={isOwner ? { color: theme.text_color } : undefined}
+              >
+                {item.label}
+              </button>
+            ))}
+            {isOwner && (
+              <button
+                onClick={() => navigate("/owner/profile")}
+                className="text-sm opacity-70 hover:opacity-100 transition-opacity"
+                style={{ color: theme.text_color }}
+              >
+                Perfil
+              </button>
+            )}
             <button
               onClick={() => {
                 localStorage.removeItem("admin_token");
-                navigate("/admin");
+                localStorage.removeItem("auth_role");
+                navigate(loginPath);
               }}
-              className="text-sm text-gray-500 hover:text-gray-700"
+              className={isOwner ? "text-sm opacity-50 hover:opacity-80 transition-opacity" : "text-sm text-gray-500 hover:text-gray-700"}
+              style={isOwner ? { color: theme.text_color } : undefined}
             >
               Sair
             </button>
@@ -409,11 +505,11 @@ export default function ClubDashboard() {
 
         {/* Create session form */}
         {showCreate && (
-          <div className="bg-white rounded-xl shadow-md p-6 mb-6">
+          <div className={cardClass} style={cardStyle}>
             <h2 className="text-lg font-semibold mb-4">{pt.admin.dashboard.createSessionTitle}</h2>
             <form onSubmit={handleCreateSession} className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium mb-1">
                   {pt.admin.dashboard.sessionLabel}
                 </label>
                 <input
@@ -428,7 +524,7 @@ export default function ClubDashboard() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium mb-1">
                   {pt.admin.dashboard.blindsLabel}
                 </label>
                 <input
@@ -445,7 +541,7 @@ export default function ClubDashboard() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium mb-1">
                   {pt.admin.dashboard.buyinLabel}
                 </label>
                 <input
@@ -462,7 +558,7 @@ export default function ClubDashboard() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium mb-1">
                   {pt.admin.dashboard.rebuyLabel}
                 </label>
                 <input
@@ -493,7 +589,7 @@ export default function ClubDashboard() {
                 <label className="text-sm text-gray-700">{pt.admin.dashboard.allowRebuys}</label>
               </div>
               <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium mb-1">
                   {pt.admin.dashboard.tableLimit}
                 </label>
                 <input
@@ -507,10 +603,25 @@ export default function ClubDashboard() {
                   min="1"
                 />
               </div>
+              <div className="col-span-2 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={createForm.cash_king_enabled}
+                  onChange={(e) =>
+                    setCreateForm({
+                      ...createForm,
+                      cash_king_enabled: e.target.checked,
+                    })
+                  }
+                  className="w-4 h-4"
+                />
+                <label className="text-sm text-gray-700">{pt.cashKing.enableLabel}</label>
+              </div>
               <div className="col-span-2">
                 <button
                   type="submit"
-                  className="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700"
+                  className={`w-full ${btnPrimaryClass}`}
+                  style={btnPrimaryStyle}
                 >
                   {pt.admin.dashboard.createSessionSubmit}
                 </button>
@@ -521,7 +632,7 @@ export default function ClubDashboard() {
 
         {/* Session dashboard */}
         {session && (
-          <div className="bg-white rounded-xl shadow-md p-6">
+          <div className={isOwner ? "rounded-xl p-6" : "bg-white rounded-xl shadow-md p-6"} style={cardStyle}>
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-xl font-semibold">{session.name}</h2>
@@ -734,6 +845,19 @@ export default function ClubDashboard() {
                               </button>
                             </>
                           )}
+                          {sp.status === "cashed_out" && sp.payout_status === "pending" && (
+                            <button
+                              onClick={() => handleMarkPaid(sp.id)}
+                              className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs hover:bg-green-200"
+                            >
+                              Pagar {pt.currency(sp.payout_amount || 0)}
+                            </button>
+                          )}
+                          {sp.status === "cashed_out" && sp.payout_status === "paid" && (
+                            <span className="px-2 py-0.5 bg-green-50 text-green-600 rounded text-xs">
+                              Pago ✓
+                            </span>
+                          )}
                         </div>
                       </td>
                     )}
@@ -753,22 +877,49 @@ export default function ClubDashboard() {
         {/* Cashout dialog */}
         {cashoutTarget && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl p-6 max-w-sm w-full mx-4">
+            <div className={`${isOwner ? '' : 'bg-white'} rounded-xl p-6 max-w-sm w-full mx-4`} style={isOwner ? { backgroundColor: `color-mix(in srgb, ${theme.bg_color} 95%, white)`, border: `1px solid ${theme.text_color}15`, color: theme.text_color } : undefined}>
               <h3 className="text-lg font-semibold mb-2">
                 {pt.admin.modals.cashoutTitle} — {cashoutTarget.player.name}
               </h3>
               <p className="text-sm text-gray-500 mb-4">
                 Fichas em jogo: {pt.currency(cashoutTarget.total_chips_in)}
               </p>
+
+              <label className="block text-xs text-gray-500 mb-1 font-medium">Quanto o jogador está saindo? (R$)</label>
               <input
                 type="number"
                 value={cashoutChips}
                 onChange={(e) => setCashoutChips(e.target.value)}
-                placeholder="Valor em fichas devolvidas"
-                className="w-full px-3 py-2 border rounded-lg mb-4"
+                placeholder="0"
+                className="w-full px-3 py-2 border rounded-lg mb-3"
                 min="0"
                 autoFocus
               />
+
+              {session?.cash_king_enabled && (
+                <>
+                  <label className="block text-xs text-gray-500 mb-1 font-medium">{pt.cashKing.croupierHoursLabel}</label>
+                  <input
+                    type="number"
+                    value={cashoutCroupierHours}
+                    onChange={(e) => setCashoutCroupierHours(e.target.value)}
+                    placeholder="0"
+                    className="w-full px-3 py-2 border rounded-lg mb-3"
+                    min="0"
+                    step="0.5"
+                  />
+                </>
+              )}
+
+              {cashoutChips && parseInt(cashoutChips) > 0 && (
+                <div className="bg-gray-50 rounded-lg p-3 mb-4 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Valor a pagar:</span>
+                    <span className="font-bold text-gray-800">{pt.currency(parseInt(cashoutChips))}</span>
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-2">
                 <button
                   onClick={handleCashout}
@@ -790,10 +941,71 @@ export default function ClubDashboard() {
           </div>
         )}
 
+        {/* Cashout result / payout modal */}
+        {cashoutResult && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className={`${isOwner ? '' : 'bg-white'} rounded-xl p-6 max-w-sm w-full text-center`} style={isOwner ? { backgroundColor: `color-mix(in srgb, ${theme.bg_color} 95%, white)`, border: `1px solid ${theme.text_color}15`, color: theme.text_color } : undefined}>
+              {cashoutResult.payout_amount && cashoutResult.payout_amount > 0 ? (
+                <>
+                  <p className="text-gray-800 font-semibold text-lg mb-1">
+                    {cashoutResult.playerName}
+                  </p>
+                  <p className="text-sm text-gray-500 mb-2">Valor a pagar</p>
+                  <p className="text-3xl font-bold text-gray-800 mb-2">
+                    {pt.currency(cashoutResult.payout_amount)}
+                  </p>
+                  {cashoutResult.cash_king_pts !== null && (
+                    <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl p-3 mb-4">
+                      <p className="text-[10px] uppercase tracking-wider text-amber-500 font-semibold mb-0.5">{pt.cashKing.pointsEarned}</p>
+                      <p className="text-2xl font-extrabold text-amber-600">{cashoutResult.cash_king_pts.toFixed(1)} <span className="text-sm font-medium">pts</span></p>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleMarkPaid(cashoutResult.session_player_id)}
+                      className={`flex-1 py-2 rounded-lg text-sm ${isOwner ? '' : 'bg-green-500 text-white hover:bg-green-600'}`}
+                      style={isOwner ? { backgroundColor: theme.accent_color, color: theme.text_color } : undefined}
+                    >
+                      Já paguei
+                    </button>
+                    <button
+                      onClick={() => setCashoutResult(null)}
+                      className="flex-1 bg-gray-100 py-2 rounded-lg hover:bg-gray-200 text-sm"
+                    >
+                      Pagar depois
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-gray-800 font-semibold text-lg mb-1">
+                    {cashoutResult.playerName}
+                  </p>
+                  <p className="text-sm text-gray-500 mb-2">
+                    Saiu sem fichas
+                  </p>
+                  {cashoutResult.cash_king_pts !== null && (
+                    <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl p-3 mb-4">
+                      <p className="text-[10px] uppercase tracking-wider text-amber-500 font-semibold mb-0.5">{pt.cashKing.pointsEarned}</p>
+                      <p className="text-2xl font-extrabold text-amber-600">{cashoutResult.cash_king_pts.toFixed(1)} <span className="text-sm font-medium">pts</span></p>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => setCashoutResult(null)}
+                    className="px-6 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm"
+                  >
+                    Fechar
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Add player modal */}
         {showAddPlayer && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl p-6 max-w-sm w-full mx-4">
+            <div className={`${isOwner ? '' : 'bg-white'} rounded-xl p-6 max-w-sm w-full mx-4`} style={isOwner ? { backgroundColor: `color-mix(in srgb, ${theme.bg_color} 95%, white)`, border: `1px solid ${theme.text_color}15`, color: theme.text_color } : undefined}>
               <h3 className="text-lg font-semibold mb-4">{pt.admin.modals.addPlayerTitle}</h3>
               <form onSubmit={handleAddPlayer}>
                 {addPlayerError && (
@@ -802,7 +1014,7 @@ export default function ClubDashboard() {
                   </div>
                 )}
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium mb-1">
                     {pt.join.nameLabel}
                   </label>
                   <input
@@ -816,7 +1028,7 @@ export default function ClubDashboard() {
                   />
                 </div>
                 <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium mb-1">
                     {pt.join.phoneLabel}
                   </label>
                   <input
@@ -831,7 +1043,7 @@ export default function ClubDashboard() {
 
                 {allowMultipleBuyins && (
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium mb-1">
                       Múltiplos Buy-ins (Opcional)
                     </label>
                     <input
@@ -855,7 +1067,8 @@ export default function ClubDashboard() {
                 <div className="flex gap-2">
                   <button
                     type="submit"
-                    className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
+                    className={`flex-1 py-2 rounded-lg ${isOwner ? '' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                    style={isOwner ? { backgroundColor: theme.accent_color, color: theme.text_color } : undefined}
                   >
                     Adicionar
                   </button>
@@ -879,7 +1092,7 @@ export default function ClubDashboard() {
         {/* Close session confirm */}
         {showCloseConfirm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+            <div className={`${isOwner ? '' : 'bg-white'} rounded-xl p-6 max-w-md w-full mx-4`} style={isOwner ? { backgroundColor: `color-mix(in srgb, ${theme.bg_color} 95%, white)`, border: `1px solid ${theme.text_color}15`, color: theme.text_color } : undefined}>
               <h3 className="text-lg font-semibold mb-2">{pt.admin.modals.closeSessionConfirm}</h3>
 
               {uncashedPlayers.length > 0 ? (
@@ -946,7 +1159,7 @@ export default function ClubDashboard() {
         {/* Player History Modal */}
         {historyTargetId && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className={`${isOwner ? '' : 'bg-white'} rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto`} style={isOwner ? { backgroundColor: `color-mix(in srgb, ${theme.bg_color} 95%, white)`, border: `1px solid ${theme.text_color}15`, color: theme.text_color } : undefined}>
               <div className="flex justify-between items-center border-b pb-4 mb-4">
                 <h3 className="text-xl font-bold">{pt.admin.playerHistory.title}</h3>
                 <button
@@ -1024,7 +1237,7 @@ export default function ClubDashboard() {
         {/* Chip Breakdown Modal */}
         {showBreakdown && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl p-6 max-w-sm w-full">
+            <div className={`${isOwner ? '' : 'bg-white'} rounded-xl p-6 max-w-sm w-full`} style={isOwner ? { backgroundColor: `color-mix(in srgb, ${theme.bg_color} 95%, white)`, border: `1px solid ${theme.text_color}15`, color: theme.text_color } : undefined}>
               <div className="flex justify-between items-center border-b pb-4 mb-4">
                 <h3 className="text-xl font-bold">Kit de Fichas</h3>
                 <button
@@ -1082,6 +1295,61 @@ export default function ClubDashboard() {
                 <div className="text-center py-8 text-red-500 text-sm">
                   Erro ao carregar distribuição de fichas.
                 </div>
+              )}
+            </div>
+          </div>
+        )}
+        {/* Verify Payment Modal */}
+        {verifyModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className={`${isOwner ? '' : 'bg-white'} rounded-xl p-6 max-w-sm w-full text-center`} style={isOwner ? { backgroundColor: `color-mix(in srgb, ${theme.bg_color} 95%, white)`, border: `1px solid ${theme.text_color}15`, color: theme.text_color } : undefined}>
+              {verifyModal.loading ? (
+                <>
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-gray-600 font-medium">Verificando pagamento...</p>
+                  <p className="text-sm text-gray-400 mt-1">{verifyModal.playerName}</p>
+                </>
+              ) : verifyModal.error ? (
+                <>
+                  <div className="text-red-500 text-4xl mb-3">✕</div>
+                  <p className="text-gray-800 font-semibold mb-1">Erro na verificação</p>
+                  <p className="text-sm text-red-600 mb-4">{verifyModal.error}</p>
+                  <button
+                    onClick={() => setVerifyModal(null)}
+                    className="px-6 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm"
+                  >
+                    Fechar
+                  </button>
+                </>
+              ) : verifyModal.result?.updated ? (
+                <>
+                  <div className="text-green-500 text-4xl mb-3">✓</div>
+                  <p className="text-gray-800 font-semibold mb-1">Pagamento confirmado!</p>
+                  <p className="text-sm text-gray-500 mb-4">
+                    {verifyModal.playerName} — fichas liberadas
+                  </p>
+                  <button
+                    onClick={() => setVerifyModal(null)}
+                    className={`px-6 py-2 rounded-lg text-sm ${isOwner ? '' : 'bg-green-500 text-white hover:bg-green-600'}`}
+                    style={isOwner ? { backgroundColor: theme.accent_color, color: theme.text_color } : undefined}
+                  >
+                    OK
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="text-yellow-500 text-4xl mb-3">⏳</div>
+                  <p className="text-gray-800 font-semibold mb-1">Aguardando pagamento</p>
+                  <p className="text-sm text-gray-500 mb-4">
+                    O Mercado Pago ainda não confirmou o pagamento de {verifyModal.playerName}.
+                  </p>
+                  <button
+                    onClick={() => setVerifyModal(null)}
+                    className="px-6 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm"
+                  >
+                    Fechar
+                  </button>
+                </>
               )}
             </div>
           </div>
