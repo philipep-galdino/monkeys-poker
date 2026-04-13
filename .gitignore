@@ -13,6 +13,10 @@ node_modules/
 frontend/dist/
 frontend/build/
 
+# Keys / Secrets
+*.pem
+*.key
+
 # Environment
 .env
 .env.local
@@ -38,6 +42,14 @@ backend/alembic/versions/__pycache__/
 .coverage
 htmlcov/
 .pytest_cache/
+
+# Debug / scratch files
+check_db.py
+backend/check_env.py
+backend/debug_data.py
+backend/debug_data_v2.py
+backend/app_errors.log
+plans/
 
 # Claude
 .claude/
