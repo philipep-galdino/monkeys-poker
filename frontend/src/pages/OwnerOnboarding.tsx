@@ -207,7 +207,7 @@ export default function OwnerOnboarding() {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center p-4"
+      className="min-h-screen flex flex-col items-center justify-center px-3 py-6 sm:p-4"
       style={{
         background: `linear-gradient(135deg, ${bg} 0%, color-mix(in srgb, ${bg} 85%, ${accent}) 50%, ${bg} 100%)`,
         color: txt,
@@ -215,16 +215,16 @@ export default function OwnerOnboarding() {
       }}
     >
       {/* Progress — clickable to return to completed steps */}
-      <div className="flex items-center gap-2 mb-8">
+      <div className="flex items-center gap-1.5 sm:gap-2 mb-6 sm:mb-8">
         {steps.map((label, i) => {
           const canClick = i <= maxVisited && i !== stepIndex;
           return (
-            <div key={label} className="flex items-center gap-2">
+            <div key={label} className="flex items-center gap-1.5 sm:gap-2">
               <button
                 type="button"
                 onClick={() => canClick && goTo(STEP_ORDER[i])}
                 disabled={!canClick}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors disabled:cursor-default"
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold transition-colors disabled:cursor-default shrink-0"
                 style={{
                   backgroundColor: i <= stepIndex ? primary : i <= maxVisited ? `color-mix(in srgb, ${primary} 40%, transparent)` : `color-mix(in srgb, ${txt} 15%, transparent)`,
                   color: i <= stepIndex ? bg : i <= maxVisited ? txt : `color-mix(in srgb, ${txt} 50%, transparent)`,
@@ -234,7 +234,7 @@ export default function OwnerOnboarding() {
                 {i < stepIndex ? "✓" : i + 1}
               </button>
               <span
-                className="text-sm"
+                className="text-xs sm:text-sm hidden sm:inline"
                 style={{
                   color: i <= stepIndex ? txt : `color-mix(in srgb, ${txt} 50%, transparent)`,
                   cursor: canClick ? "pointer" : "default",
@@ -244,7 +244,7 @@ export default function OwnerOnboarding() {
                 {label}
               </span>
               {i < steps.length - 1 && (
-                <div className="w-8 h-px" style={{ backgroundColor: `color-mix(in srgb, ${txt} 20%, transparent)` }} />
+                <div className="w-4 sm:w-8 h-px" style={{ backgroundColor: `color-mix(in srgb, ${txt} 20%, transparent)` }} />
               )}
             </div>
           );
@@ -252,7 +252,7 @@ export default function OwnerOnboarding() {
       </div>
 
       <div
-        className="backdrop-blur-md rounded-2xl shadow-2xl p-8 w-full"
+        className="backdrop-blur-md rounded-2xl shadow-2xl p-5 sm:p-8 w-full"
         style={{
           backgroundColor: `color-mix(in srgb, ${bg} 80%, white)`,
           border: `1px solid color-mix(in srgb, ${txt} 15%, transparent)`,
@@ -502,47 +502,51 @@ export default function OwnerOnboarding() {
 
                 <div className="space-y-2">
                   {chips.map((chip, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={chip.label}
-                        onChange={(e) => updateChip(i, "label", e.target.value)}
-                        placeholder="Nome"
-                        className={inputSmCls}
-                        style={{ ...inputStyle, flex: 2 }}
-                      />
-                      <input
-                        type="number"
-                        value={chip.value}
-                        onChange={(e) => updateChip(i, "value", e.target.value)}
-                        placeholder="Valor"
-                        className={inputSmCls}
-                        style={{ ...inputStyle, flex: 1 }}
-                        min="0.01"
-                        step="0.01"
-                      />
-                      <input
-                        type="number"
-                        value={chip.quantity}
-                        onChange={(e) => updateChip(i, "quantity", e.target.value)}
-                        placeholder="Qtd"
-                        className={inputSmCls}
-                        style={{ ...inputStyle, flex: 1 }}
-                        min="0"
-                      />
-                      <input
-                        type="color"
-                        value={chip.color || "#888888"}
-                        onChange={(e) => updateChip(i, "color", e.target.value)}
-                        className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent shrink-0"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeChipRow(i)}
-                        className="text-red-400 hover:text-red-300 text-xs shrink-0"
-                      >
-                        ✕
-                      </button>
+                    <div key={i} className="rounded-lg p-2 sm:p-0" style={{ backgroundColor: `color-mix(in srgb, ${txt} 5%, transparent)`, border: `1px solid color-mix(in srgb, ${txt} 8%, transparent)` }}>
+                      <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2">
+                        <input
+                          type="text"
+                          value={chip.label}
+                          onChange={(e) => updateChip(i, "label", e.target.value)}
+                          placeholder="Nome"
+                          className={inputSmCls}
+                          style={{ ...inputStyle, flex: 2 }}
+                        />
+                        <input
+                          type="number"
+                          value={chip.value}
+                          onChange={(e) => updateChip(i, "value", e.target.value)}
+                          placeholder="Valor"
+                          className={inputSmCls}
+                          style={{ ...inputStyle, flex: 1 }}
+                          min="0.01"
+                          step="0.01"
+                        />
+                        <input
+                          type="number"
+                          value={chip.quantity}
+                          onChange={(e) => updateChip(i, "quantity", e.target.value)}
+                          placeholder="Qtd"
+                          className={inputSmCls}
+                          style={{ ...inputStyle, flex: 1 }}
+                          min="0"
+                        />
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={chip.color || "#888888"}
+                            onChange={(e) => updateChip(i, "color", e.target.value)}
+                            className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent shrink-0"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeChipRow(i)}
+                            className="text-red-400 hover:text-red-300 text-xs shrink-0"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
