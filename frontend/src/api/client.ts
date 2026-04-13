@@ -53,6 +53,25 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
 
 // ── Club types ──────────────────────────────────────────────────────────────
 
+export type OwnerResponse = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  created_at: string;
+};
+
+export type ClubThemeResponse = {
+  logo_url: string | null;
+  primary_color: string;
+  accent_color: string;
+  bg_color: string;
+  text_color: string;
+  bg_image_url: string | null;
+  font_family: string;
+  tv_layout: string;
+};
+
 export type ClubResponse = {
   id: string;
   name: string;
@@ -61,6 +80,18 @@ export type ClubResponse = {
   default_rake_buyin: number;
   default_rake_rebuy: number;
   allow_multiple_buyins: boolean;
+  payment_mode: string;
+  pix_key: string | null;
+  has_mp_credentials: boolean;
+  owner: OwnerResponse | null;
+  logo_url: string | null;
+  primary_color: string;
+  accent_color: string;
+  bg_color: string;
+  text_color: string;
+  bg_image_url: string | null;
+  font_family: string;
+  tv_layout: string;
   created_at: string;
 };
 
@@ -97,6 +128,7 @@ export type SessionResponse = {
   rake_rebuy: number;
   status: string;
   table_limit: number | null;
+  cash_king_enabled: boolean;
   buyin_kit: ChipKit | null;
   rebuy_kit: ChipKit | null;
   created_at: string;
@@ -129,6 +161,9 @@ export type SessionPlayerData = {
   total_chips_in: number;
   total_physical_chips: number;
   total_chips_out: number;
+  pix_key: string | null;
+  payout_amount: number | null;
+  payout_status: string | null;
   joined_at: string;
   transactions: TransactionData[];
 };
@@ -164,6 +199,45 @@ export type ClosePreviewResponse = {
   uncashed_players: { id: string; name: string; total_chips_in: number; total_physical_chips: number }[];
 };
 
+// ── Cash King types ────────────────────────────────────────────────────────
+
+export type CashKingScoreData = {
+  id: string;
+  player: PlayerBrief;
+  session_name: string | null;
+  session_date: string | null;
+  description: string | null;
+  attendance_pts: number;
+  hours_pts: number;
+  croupier_pts: number;
+  profit_pts: number;
+  manual_adj: number;
+  total_pts: number;
+};
+
+export type CashKingLeaderboardEntry = {
+  player: PlayerBrief;
+  total_pts: number;
+  session_count: number;
+};
+
+export type CashKingLeaderboardResponse = {
+  year_month: string;
+  entries: CashKingLeaderboardEntry[];
+};
+
+export type CashoutResult = {
+  session_player_id: string;
+  total_chips_in: number;
+  total_chips_out: number;
+  net_result: number;
+  payout_amount: number | null;
+  pix_key: string | null;
+  payout_status: string | null;
+  status: string;
+  cash_king_pts: number | null;
+};
+
 export const api = {
   // Auth
   login: (username: string, password: string) =>
@@ -171,6 +245,34 @@ export const api = {
       method: "POST",
       body: { username, password },
     }),
+
+  ownerRegister: (data: { name: string; email: string; phone: string; password: string; club_name: string; club_slug: string }) =>
+    request<{ access_token: string; token_type: string }>("/owner/register", {
+      method: "POST",
+      body: data,
+    }),
+
+  ownerLogin: (email: string, password: string) =>
+    request<{ access_token: string; token_type: string }>("/owner/login", {
+      method: "POST",
+      body: { email, password },
+    }),
+
+  getOwnerProfile: (token: string) =>
+    request<OwnerResponse>("/owner/me", { token }),
+
+  changeOwnerPassword: (current_password: string, new_password: string, token: string) =>
+    request<{ status: string }>("/owner/me/password", {
+      method: "PUT",
+      body: { current_password, new_password },
+      token,
+    }),
+
+  getClubTheme: (clubId: string) =>
+    request<ClubThemeResponse>(`/clubs/${clubId}/theme`),
+
+  getClubBySlug: (slug: string) =>
+    request<{ id: string; name: string; slug: string; logo_url: string | null; primary_color: string; accent_color: string; bg_color: string; text_color: string; font_family: string; active_session_id: string | null }>(`/clubs/by-slug/${slug}`),
 
   // Clubs
   createClub: (data: Record<string, unknown>, token: string) =>
@@ -240,6 +342,7 @@ export const api = {
       id: string;
       session_id: string;
       session_name: string;
+      player_id: string;
       player_name: string;
       status: string;
       total_chips_in: number;
@@ -247,6 +350,7 @@ export const api = {
       total_chips_out: number;
       blind_value: number;
       blinds_count: number;
+      cash_king_enabled: boolean;
       transactions: TransactionData[];
     }>(`/clubs/${clubId}/sessions/${sessionId}/player/${playerToken}`),
 
@@ -254,10 +358,12 @@ export const api = {
   createBuyin: (clubId: string, sessionId: string, playerToken: string) =>
     request<{
       transaction_id: string;
-      qr_code_base64: string;
-      qr_code: string;
+      payment_mode: string;
       amount: number;
-      expires_at: string;
+      qr_code_base64?: string;
+      qr_code?: string;
+      expires_at?: string;
+      pix_key?: string;
     }>(`/clubs/${clubId}/sessions/${sessionId}/player/${playerToken}/buyin`, {
       method: "POST",
     }),
@@ -265,10 +371,12 @@ export const api = {
   createRebuy: (clubId: string, sessionId: string, playerToken: string) =>
     request<{
       transaction_id: string;
-      qr_code_base64: string;
-      qr_code: string;
+      payment_mode: string;
       amount: number;
-      expires_at: string;
+      qr_code_base64?: string;
+      qr_code?: string;
+      expires_at?: string;
+      pix_key?: string;
     }>(`/clubs/${clubId}/sessions/${sessionId}/player/${playerToken}/rebuy`, {
       method: "POST",
     }),
@@ -318,10 +426,31 @@ export const api = {
     sessionPlayerId: string,
     chipsReturned: number,
     token: string,
+    pixKey?: string,
+    croupierHours?: number,
   ) =>
-    request<Record<string, unknown>>(
+    request<CashoutResult>(
       `/admin/clubs/${clubId}/sessions/${sessionId}/players/${sessionPlayerId}/cashout`,
-      { method: "POST", body: { chips_returned: chipsReturned }, token },
+      {
+        method: "POST",
+        body: {
+          chips_returned: chipsReturned,
+          pix_key: pixKey || null,
+          ...(croupierHours !== undefined && croupierHours > 0 ? { croupier_hours: croupierHours } : {}),
+        },
+        token,
+      },
+    ),
+
+  markPayoutPaid: (
+    clubId: string,
+    sessionId: string,
+    sessionPlayerId: string,
+    token: string,
+  ) =>
+    request<{ status: string; session_player_id: string }>(
+      `/admin/clubs/${clubId}/sessions/${sessionId}/players/${sessionPlayerId}/mark-paid`,
+      { method: "POST", token },
     ),
 
   // Player history
@@ -384,6 +513,46 @@ export const api = {
     if (params?.table_limit) url += `&table_limit=${params.table_limit}`;
     return request<ChipBreakdownData>(url, { token });
   },
+
+  // Club Players
+  listClubPlayers: (clubId: string, token: string, q?: string) => {
+    let url = `/admin/clubs/${clubId}/players`;
+    if (q) url += `?q=${encodeURIComponent(q)}`;
+    return request<PlayerBrief[]>(url, { token });
+  },
+
+  // Cash King
+  getCashKingLeaderboard: (clubId: string, yearMonth?: string) => {
+    let url = `/clubs/${clubId}/cash-king/leaderboard`;
+    if (yearMonth) url += `?year_month=${yearMonth}`;
+    return request<CashKingLeaderboardResponse>(url);
+  },
+
+  getCashKingPlayerScores: (clubId: string, playerId: string, yearMonth?: string) => {
+    let url = `/clubs/${clubId}/cash-king/players/${playerId}`;
+    if (yearMonth) url += `?year_month=${yearMonth}`;
+    return request<CashKingScoreData[]>(url);
+  },
+
+  createCashKingScore: (clubId: string, data: Record<string, unknown>, token: string) =>
+    request<CashKingScoreData>(`/admin/clubs/${clubId}/cash-king/scores`, {
+      method: "POST",
+      body: data,
+      token,
+    }),
+
+  editCashKingScore: (clubId: string, scoreId: string, data: Record<string, unknown>, token: string) =>
+    request<CashKingScoreData>(`/admin/clubs/${clubId}/cash-king/scores/${scoreId}`, {
+      method: "PUT",
+      body: data,
+      token,
+    }),
+
+  deleteCashKingScore: (clubId: string, scoreId: string, token: string) =>
+    request<void>(`/admin/clubs/${clubId}/cash-king/scores/${scoreId}`, {
+      method: "DELETE",
+      token,
+    }),
 
   // Health
   health: () => request<{ status: string; database: string }>("/health"),
