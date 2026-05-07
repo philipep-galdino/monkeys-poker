@@ -55,3 +55,14 @@ plans/
 .claude/
 REFINEMENTS.md
 COMMITS.md
+
+# NGINX
+
+nginx/*.conf
+!nginx/nginx.conf.example
+
+# SSL
+certbot/conf/
+
+# Certbot challenge cache
+certbot/www/
